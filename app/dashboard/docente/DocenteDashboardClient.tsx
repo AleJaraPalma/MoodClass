@@ -11,8 +11,12 @@ import {
   BookOpen, Radio, Users, ArrowRight, X, Clock, Calendar, Play, CheckCircle2,
   MapPin, BookMarked, Plus, ChevronRight, LayoutGrid, Dices, Loader2,
   BarChart, TrendingUp, HelpCircle, LogOut, Bell, Settings, ChevronDown,
-  ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown, Sparkles
+  ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown, Sparkles, UserCircle
 } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
 interface Props {
   usuario: Usuario
@@ -306,39 +310,34 @@ export default function DocenteDashboardClient({
   return (
     <div className="min-h-screen flex bg-[#F8F9FF] font-sans">
       {/* Sidebar */}
-      <aside className="w-[60px] bg-[#1A1A2E] flex flex-col items-center py-6 justify-between shrink-0 sticky top-0 h-screen z-40">
+      <aside className="w-[76px] bg-[#1A1A2E] flex flex-col items-center py-6 justify-between shrink-0 sticky top-0 h-screen z-40">
         <div className="flex flex-col gap-6 items-center w-full">
           {/* Logo */}
           <div className="text-indigo-400 mb-2">
             <Sparkles className="h-6 w-6" />
           </div>
           {/* Menu items */}
-          <Link href="/dashboard/docente" title="Dashboard" className="text-white hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
+          <Link href="/dashboard/docente" title="Inicio" className="flex flex-col items-center gap-1 text-white hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
             <BarChart className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wide">Inicio</span>
           </Link>
-          <button title="Estudiantes" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
+          <button title="Estudiantes" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
             <Users className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wide">Estudiantes</span>
           </button>
-          <button title="Clases" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
+          <button title="Calendario" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
             <Calendar className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wide">Calendario</span>
           </button>
-          <Link href="/dashboard/reportes" title="Reportes" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
+          <Link href="/dashboard/reportes" title="Reportes" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
             <TrendingUp className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wide">Reportes</span>
           </Link>
         </div>
         <div className="flex flex-col gap-6 items-center w-full">
-          <button title="Ayuda" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
+          <button title="Ayuda" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
             <HelpCircle className="h-5 w-5" />
-          </button>
-          <button
-            title="Cerrar sesión"
-            onClick={async () => {
-              await supabase.auth.signOut()
-              router.push('/login')
-            }}
-            className="text-slate-400 hover:text-red-400 p-2 rounded-xl hover:bg-red-950/20 transition-colors"
-          >
-            <LogOut className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wide">Ayuda</span>
           </button>
         </div>
       </aside>
@@ -361,15 +360,34 @@ export default function DocenteDashboardClient({
               <Settings className="h-5 w-5" />
             </button>
             <div className="h-8 w-px bg-slate-100" />
-            <div className="relative">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-extrabold text-sm uppercase">
-                  {usuario.nombre.charAt(0)}
-                </div>
-                <span className="hidden sm:inline-block max-w-[150px] truncate">{usuario.nombre}</span>
-                <ChevronDown className="h-4 w-4 text-slate-400" />
-              </div>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 text-sm font-semibold text-slate-700 outline-none">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-extrabold text-sm uppercase">
+                    {usuario.nombre.charAt(0)}
+                  </div>
+                  <span className="hidden sm:inline-block max-w-[150px] truncate">{usuario.nombre}</span>
+                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href="/perfil">
+                    <UserCircle className="h-4 w-4 text-slate-400" /> Mi perfil
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    router.push('/login')
+                  }}
+                  className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                >
+                  <LogOut className="h-4 w-4" /> Cerrar sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
