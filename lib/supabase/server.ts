@@ -18,9 +18,10 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const { domain, ...cookieOptions } = options
+              cookieStore.set(name, value, cookieOptions)
+            })
           } catch {
             // Server Component – ignore
           }
