@@ -31,10 +31,19 @@ const DIA_LABELS: Record<string, string> = {
   viernes: 'Viernes',
   sabado: 'Sábado',
 }
+const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21] as const
 
 function getTodayDia(): string {
   const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   return days[new Date().getDay()]
+}
+
+function getDiaSemanaFromFecha(fechaStr: string): string {
+  if (!fechaStr) return 'lunes'
+  const [year, month, day] = fechaStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
+  return days[date.getDay()]
 }
 
 function formatHora(hora: string): string {
@@ -102,7 +111,7 @@ export default function DocenteDashboardClient({
   // Iniciar clase
   const [iniciando, setIniciando] = useState<string | null>(null)
 
-  const todayDia = getTodayDia()
+  const todayDia = getDiaSemanaFromFecha(today)
 
   // Sesiones de hoy (por día de semana de la sección)
   const seccionesHoy = secciones.filter(s => s.dia_semana === todayDia)
@@ -547,30 +556,116 @@ export default function DocenteDashboardClient({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-7 gap-3">
-            {/* Cabecera de días */}
-            {DIAS_SEMANA.map(dia => (
-              <div key={dia} className={`text-center text-[10px] font-bold uppercase tracking-wider pb-2 ${dia === todayDia ? 'text-indigo-600' : 'text-slate-400'}`}>
-                {DIA_LABELS[dia].substring(0, 3)}
+          <div className="flex bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden select-none">
+            {/* Columna de Horas */}
+            <div className="w-14 shrink-0 border-r border-slate-100 bg-slate-50/50 pt-10 relative">
+              {HOURS.map(hour => (
+                <div key={hour} className="h-16 relative pr-2 flex items-start justify-end">
+                  <span className="absolute right-2 -top-2 text-[9px] font-bold text-slate-400 font-mono">
+                    {`${hour}:00`}
+                  </span>
+                  {hour === 21 && (
+                    <span className="absolute right-2 top-14 text-[9px] font-bold text-slate-400 font-mono">
+                      22:00
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Grid de Días */}
+            <div className="flex-1 flex flex-col min-w-0">
+              {/* Cabecera de Días */}
+              <div className="grid grid-cols-6 border-b border-slate-100 bg-slate-50/30">
+                {DIAS_SEMANA.map(dia => {
+                  const isToday = dia === todayDia
+                  return (
+                    <div key={dia} className={`py-3 text-center border-r border-slate-100 last:border-r-0 flex flex-col items-center justify-center ${isToday ? 'bg-indigo-50/40' : ''}`}>
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wider ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}>
+                        {DIA_LABELS[dia].substring(0, 3)}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-            {/* Secciones por día */}
-            {DIAS_SEMANA.map(dia => {
-              const secsDelDia = secciones.filter(s => s.dia_semana === dia)
-              return (
-                <div key={dia} className={`rounded-xl p-1.5 min-h-[80px] ${dia === todayDia ? 'bg-indigo-50/60 border border-indigo-100' : 'bg-slate-50/60'}`}>
-                  {secsDelDia.map(sec => (
-                    <div key={sec.id} className="card p-2.5 mb-1.5 bg-white border border-slate-100 shadow-xs hover:border-indigo-200 transition-colors cursor-pointer text-left w-full"
-                      onClick={() => router.push(`/asignatura/${asignaturas.find(a => a.codigo === sec.codigo_asignatura)?.id || '#'}`)}
-                    >
-                      <div className="text-[9px] font-extrabold text-indigo-700 truncate uppercase leading-tight">{sec.codigo_asignatura}</div>
-                      <div className="text-[9px] text-slate-500 mt-0.5">{formatHora(sec.hora_inicio)}</div>
-                      {sec.subseccion && <div className="text-[8px] text-slate-400">Secc. {sec.subseccion}</div>}
+
+              {/* Cuerpo del Calendario */}
+              <div className="relative h-[896px] grid grid-cols-6">
+                {/* Líneas de fondo del grid (divisores de hora y 15 min) */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col">
+                  {HOURS.map(hour => (
+                    <div key={hour} className="h-16 border-b border-slate-100/70 relative w-full last:border-b-0">
+                      {/* 15 min dividers */}
+                      <div className="absolute top-[16px] left-0 right-0 border-b border-dashed border-slate-100/30 w-full" />
+                      <div className="absolute top-[32px] left-0 right-0 border-b border-dashed border-slate-100/30 w-full" />
+                      <div className="absolute top-[48px] left-0 right-0 border-b border-dashed border-slate-100/30 w-full" />
                     </div>
                   ))}
                 </div>
-              )
-            })}
+
+                {/* Columnas de los días */}
+                {DIAS_SEMANA.map(dia => {
+                  const isToday = dia === todayDia
+                  const secsDelDia = secciones.filter(s => s.dia_semana === dia)
+
+                  return (
+                    <div key={dia} className={`relative border-r border-slate-100 last:border-r-0 h-full ${isToday ? 'bg-indigo-50/10' : ''}`}>
+                      {secsDelDia.map(sec => {
+                        const [startH, startM] = sec.hora_inicio.split(':').map(Number)
+                        const [endH, endM] = sec.hora_fin.split(':').map(Number)
+
+                        const startMin = (startH * 60 + startM) - 480
+                        const endMin = (endH * 60 + endM) - 480
+
+                        const top = (startMin * 64) / 60
+                        const height = ((endMin - startMin) * 64) / 60
+
+                        // Color de la asignatura basado en su código
+                        let hash = 0
+                        for (let i = 0; i < sec.codigo_asignatura.length; i++) {
+                          hash = sec.codigo_asignatura.charCodeAt(i) + ((hash << 5) - hash)
+                        }
+                        const colorPalettes = [
+                          { border: 'border-l-indigo-500 border-indigo-100', bg: 'bg-indigo-50/60 text-indigo-950', hover: 'hover:bg-indigo-100/80 hover:border-indigo-200' },
+                          { border: 'border-l-emerald-500 border-emerald-100', bg: 'bg-emerald-50/60 text-emerald-950', hover: 'hover:bg-emerald-100/80 hover:border-emerald-200' },
+                          { border: 'border-l-sky-500 border-sky-100', bg: 'bg-sky-50/60 text-sky-950', hover: 'hover:bg-sky-100/80 hover:border-sky-200' },
+                          { border: 'border-l-amber-500 border-amber-100', bg: 'bg-amber-50/60 text-amber-950', hover: 'hover:bg-amber-100/80 hover:border-amber-200' },
+                          { border: 'border-l-rose-500 border-rose-100', bg: 'bg-rose-50/60 text-rose-950', hover: 'hover:bg-rose-100/80 hover:border-rose-200' },
+                          { border: 'border-l-violet-500 border-violet-100', bg: 'bg-violet-50/60 text-violet-950', hover: 'hover:bg-violet-100/80 hover:border-violet-200' },
+                        ]
+                        const color = colorPalettes[Math.abs(hash) % colorPalettes.length]
+
+                        return (
+                          <div
+                            key={sec.id}
+                            onClick={() => router.push(`/asignatura/${asignaturas.find(a => a.codigo === sec.codigo_asignatura)?.id || '#'}`)}
+                            className={`absolute left-1 right-1 p-2 rounded-xl border border-l-4 ${color.border} ${color.bg} ${color.hover} transition-all cursor-pointer shadow-xs flex flex-col justify-between overflow-hidden group select-none`}
+                            style={{ top: `${top}px`, height: `${height}px` }}
+                            title={`${sec.nombre_asignatura} (${sec.codigo_asignatura})`}
+                          >
+                            <div className="flex-1 min-h-0">
+                              <div className="text-[9px] font-extrabold leading-tight uppercase line-clamp-2">
+                                {sec.nombre_asignatura}
+                              </div>
+                              {sec.sala && (
+                                <div className="text-[8px] font-bold text-slate-500 flex items-center gap-0.5 mt-1">
+                                  <MapPin className="h-2.5 w-2.5 shrink-0 text-slate-400" />
+                                  <span className="truncate">{sec.sala}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-[8px] font-extrabold text-slate-400 shrink-0 mt-1 flex items-center gap-0.5 font-mono">
+                              <Clock className="h-2.5 w-2.5" />
+                              {sec.hora_inicio.substring(0, 5)} - {sec.hora_fin.substring(0, 5)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
