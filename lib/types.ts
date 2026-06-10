@@ -168,9 +168,7 @@ export interface DimensionConfig {
   glowColor: string
   questionEntrada: string
   questionSalida: string
-  min: string
-  mid: string
-  max: string
+  levels: [string, string, string, string, string]
 }
 
 export const DIMENSIONES: DimensionConfig[] = [
@@ -183,9 +181,7 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(245,158,11,0.7)',
     questionEntrada: '¿Cómo sientes tu energía en este momento?',
     questionSalida: '¿Cómo sientes tu energía al terminar esta clase?',
-    min: 'Agotado/a',
-    mid: 'Regular',
-    max: 'Con toda la energía',
+    levels: ['Sin batería', 'A media carga', 'Funcionando', 'Con buena energía', 'Encendido/a al máximo'],
   },
   {
     key: 'foco',
@@ -196,9 +192,7 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(59,130,246,0.7)',
     questionEntrada: '¿Qué tan presente y concentrado/a te sientes ahora mismo?',
     questionSalida: '¿Qué tan presente lograste estar durante la clase?',
-    min: 'Mi mente está en otro lado',
-    mid: 'Más o menos aquí',
-    max: 'Completamente presente',
+    levels: ['Mi mente anda lejos', 'Me cuesta aterrizar', 'Voy y vengo', 'Bastante presente', 'Aquí, completamente'],
   },
   {
     key: 'animo',
@@ -209,9 +203,7 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(236,72,153,0.7)',
     questionEntrada: '¿Cómo describirías tu estado emocional en este momento?',
     questionSalida: '¿Cómo te vas emocionalmente al salir de esta clase?',
-    min: 'Me siento mal',
-    mid: 'Ni bien ni mal',
-    max: 'Me siento muy bien',
+    levels: ['Día gris', 'Algo apagado/a', 'Tranquilo/a', 'De buen ánimo', 'Brillando'],
   },
   {
     key: 'claridad',
@@ -222,9 +214,7 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(16,185,129,0.7)',
     questionEntrada: '¿Qué tan claro/a y despejado/a sientes tu mente hoy?',
     questionSalida: '¿Qué tan claro/a quedaste con los contenidos de hoy?',
-    min: 'Muy nublado/a',
-    mid: 'Algo nublado/a',
-    max: 'Muy claro/a',
+    levels: ['Todo borroso', 'Entre nubes', 'Despejando', 'Lo veo claro', 'Nitidez total'],
   },
   {
     key: 'confianza',
@@ -235,9 +225,7 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(139,92,246,0.7)',
     questionEntrada: '¿Qué tan seguro/a te sientes con los contenidos de esta asignatura?',
     questionSalida: '¿Cómo te sientes con la asignatura después de esta clase?',
-    min: 'Me siento perdido/a',
-    mid: 'Más o menos',
-    max: 'Me siento seguro/a',
+    levels: ['Dudando de mí', 'Con inseguridad', 'Me la puedo creer', 'Confío en mí', 'Imparable'],
   },
   {
     key: 'motivacion',
@@ -248,9 +236,7 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(132,204,22,0.7)',
     questionEntrada: '¿Qué tan motivado/a llegas a esta clase hoy?',
     questionSalida: '¿Cómo te vas de motivado/a después de hoy?',
-    min: 'Sin ganas',
-    mid: 'Más o menos',
-    max: 'Con muchas ganas',
+    levels: ['Cuesta arriba', 'Sin muchas ganas', 'Aquí estoy', 'Con ganas de más', 'A toda máquina'],
   },
   {
     key: 'memoria',
@@ -261,8 +247,6 @@ export const DIMENSIONES: DimensionConfig[] = [
     glowColor: 'rgba(99,102,241,0.7)',
     questionEntrada: '¿Qué tan disponible sientes tu capacidad de recordar y conectar ideas?',
     questionSalida: '¿Qué tan bien crees que vas a retener lo que vimos hoy?',
-    min: 'No recuerdo nada',
-    mid: 'Recuerdo algo',
-    max: 'Me siento muy conectado/a',
+    levels: ['Página en blanco', 'Recuerdos difusos', 'Algo me suena', 'Lo tengo fresco', 'Todo conectado'],
   },
 ]

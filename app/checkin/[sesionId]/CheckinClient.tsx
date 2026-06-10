@@ -34,6 +34,7 @@ export default function CheckinClient({ sesion, mood }: Props) {
   const router = useRouter()
 
   const [user, setUser] = useState<{ id: string } | null>(null)
+  const [primerNombre, setPrimerNombre] = useState('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [values, setValues] = useState<DimensionValues>(DEFAULT_VALUES)
@@ -52,6 +53,16 @@ export default function CheckinClient({ sesion, mood }: Props) {
         return
       }
       setUser(u)
+
+      const { data: perfil } = await supabase
+        .from('usuarios')
+        .select('nombre')
+        .eq('id', u.id)
+        .single()
+
+      if (perfil?.nombre) {
+        setPrimerNombre(perfil.nombre.trim().split(/\s+/)[0])
+      }
 
       // 1. Check if student already submitted a response for this specific mood
       const { data: currentCheckin } = await supabase
@@ -327,13 +338,21 @@ export default function CheckinClient({ sesion, mood }: Props) {
 
       {/* Title + Disclaimer */}
       <div className="px-6 pt-10 pb-6 max-w-md mx-auto text-center anim-fade-up">
+        {primerNombre && (
+          <p className="text-2xl font-extrabold font-sora text-indigo-950 mb-1">
+            ¡Bienvenido/a, {primerNombre}!
+          </p>
+        )}
         <h1 className="text-2xl font-extrabold font-sora text-indigo-950 mb-2">
           {tipo === 'entrada' ? '¿Cómo llegas hoy?' : '¿Cómo te vas de la clase?'}
         </h1>
-        <p className="text-slate-500 text-xs leading-relaxed mb-4">
+        <p className="text-slate-500 text-xs leading-relaxed mb-1">
           {tipo === 'entrada'
             ? 'Responde con honestidad marcando tus niveles en estas 7 dimensiones socioemocionales.'
             : 'Tómate un momento para reflexionar sobre los niveles en estas dimensiones al salir de clases.'}
+        </p>
+        <p className="text-slate-400 text-xs leading-relaxed mb-4">
+          Ilumina las gemas según cómo te sientes en cada dimensión
         </p>
         {/* Privacy disclaimer */}
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-left">
