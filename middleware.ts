@@ -25,11 +25,21 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  const { pathname } = request.nextUrl
+
+  console.log(`[Middleware] Ruta: ${pathname}`)
+  console.log(`[Middleware] variables de entorno - URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Definida' : 'FALTANTE'}, AnonKey: ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Definida' : 'FALTANTE'}`)
+
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+  if (error) {
+    console.error('[Middleware] Error en getUser():', error.message || error)
+  } else {
+    console.log(`[Middleware] Usuario autenticado: ${user ? user.email : 'Ninguno'}`)
+  }
 
   const publicRoutes = ['/login', '/', '/forgot-password', '/reset-password']
   const isPublicRoute = publicRoutes.some((route) => pathname === route)
