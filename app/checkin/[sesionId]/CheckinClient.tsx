@@ -340,11 +340,18 @@ export default function CheckinClient({ sesion, mood }: Props) {
       <div className="px-6 pt-10 pb-6 max-w-md mx-auto text-center anim-fade-up">
         {primerNombre && (
           <p className="text-2xl font-extrabold font-sora text-indigo-950 mb-1">
-            ¡Bienvenido/a, {primerNombre}!
+            ¡Bienvenido/a,{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500">
+              {primerNombre}
+            </span>!
           </p>
         )}
         <h1 className="text-2xl font-extrabold font-sora text-indigo-950 mb-2">
-          {tipo === 'entrada' ? '¿Cómo llegas hoy?' : '¿Cómo te vas de la clase?'}
+          {tipo === 'entrada'
+            ? '¿Cómo llegas hoy?'
+            : tipo === 'salida'
+            ? '¿Cómo te vas de la clase?'
+            : `¿Cómo te sentiste en esta actividad de ${(mood.tipo_actividad || 'hoy').toLowerCase()}?`}
         </h1>
         <p className="text-slate-500 text-xs leading-relaxed mb-1">
           {tipo === 'entrada'
