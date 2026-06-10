@@ -8,15 +8,12 @@ import toast from 'react-hot-toast'
 import type { Asignatura, Seccion, Sesion, Usuario, Checkin } from '@/lib/types'
 import QRCode from 'qrcode'
 import {
-  BookOpen, Radio, Users, ArrowRight, X, Clock, Calendar, Play, CheckCircle2,
+  BookOpen, Radio, ArrowRight, X, Clock, Calendar, Play, CheckCircle2,
   MapPin, BookMarked, Plus, ChevronRight, LayoutGrid, Dices, Loader2,
-  BarChart, TrendingUp, HelpCircle, LogOut, Bell, Settings, ChevronDown,
-  ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown, Sparkles, UserCircle
+  ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown
 } from 'lucide-react'
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu'
+import Sidebar from '@/components/Sidebar'
+import HeaderPerfil from '@/components/HeaderPerfil'
 
 interface Props {
   usuario: Usuario
@@ -309,38 +306,7 @@ export default function DocenteDashboardClient({
 
   return (
     <div className="min-h-screen flex bg-[#F8F9FF] font-sans">
-      {/* Sidebar */}
-      <aside className="w-[76px] bg-[#1A1A2E] flex flex-col items-center py-6 justify-between shrink-0 sticky top-0 h-screen z-40">
-        <div className="flex flex-col gap-6 items-center w-full">
-          {/* Logo */}
-          <div className="text-indigo-400 mb-2">
-            <Sparkles className="h-6 w-6" />
-          </div>
-          {/* Menu items */}
-          <Link href="/dashboard/docente" title="Inicio" className="flex flex-col items-center gap-1 text-white hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
-            <BarChart className="h-5 w-5" />
-            <span className="text-[9px] font-bold uppercase tracking-wide">Inicio</span>
-          </Link>
-          <button title="Estudiantes" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
-            <Users className="h-5 w-5" />
-            <span className="text-[9px] font-bold uppercase tracking-wide">Estudiantes</span>
-          </button>
-          <button title="Calendario" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
-            <Calendar className="h-5 w-5" />
-            <span className="text-[9px] font-bold uppercase tracking-wide">Calendario</span>
-          </button>
-          <Link href="/dashboard/reportes" title="Reportes" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
-            <TrendingUp className="h-5 w-5" />
-            <span className="text-[9px] font-bold uppercase tracking-wide">Reportes</span>
-          </Link>
-        </div>
-        <div className="flex flex-col gap-6 items-center w-full">
-          <button title="Ayuda" className="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
-            <HelpCircle className="h-5 w-5" />
-            <span className="text-[9px] font-bold uppercase tracking-wide">Ayuda</span>
-          </button>
-        </div>
-      </aside>
+      <Sidebar />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -351,44 +317,7 @@ export default function DocenteDashboardClient({
               Mood<span className="text-indigo-600">Class</span> Panel Docente
             </span>
           </div>
-          <div className="flex items-center gap-4">
-            <button title="Notificaciones" className="p-2 rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />
-            </button>
-            <button title="Configuración" className="p-2 rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors">
-              <Settings className="h-5 w-5" />
-            </button>
-            <div className="h-8 w-px bg-slate-100" />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 text-sm font-semibold text-slate-700 outline-none">
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-extrabold text-sm uppercase">
-                    {usuario.nombre.charAt(0)}
-                  </div>
-                  <span className="hidden sm:inline-block max-w-[150px] truncate">{usuario.nombre}</span>
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href="/perfil">
-                    <UserCircle className="h-4 w-4 text-slate-400" /> Mi perfil
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={async () => {
-                    await supabase.auth.signOut()
-                    router.push('/login')
-                  }}
-                  className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                >
-                  <LogOut className="h-4 w-4" /> Cerrar sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <HeaderPerfil nombre={usuario.nombre} />
         </header>
 
         {/* Content Body */}

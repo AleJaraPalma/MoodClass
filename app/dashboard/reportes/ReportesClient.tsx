@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -10,13 +8,15 @@ import {
   ResponsiveContainer, Cell
 } from 'recharts'
 import {
-  BarChart2, TrendingUp, Users, Calendar, Sparkles, HelpCircle,
-  LogOut, Bell, Settings, ChevronDown, BookOpen, AlertTriangle,
+  BarChart2, TrendingUp, Calendar, Sparkles,
+  ChevronDown, BookOpen, AlertTriangle,
   CheckCircle2, Clock, Brain, Lightbulb, Loader2, ChevronRight,
   BarChart as BarChartIcon, Radio, Layers
 } from 'lucide-react'
 import type { Usuario, Seccion } from '@/lib/types'
 import { DIMENSIONES } from '@/lib/types'
+import Sidebar from '@/components/Sidebar'
+import HeaderPerfil from '@/components/HeaderPerfil'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,7 +160,6 @@ function buildDistributionData(checkins: MoodData['checkins'], dimKey: string) {
 
 export default function ReportesClient({ usuario, secciones }: Props) {
   const supabase = createClient()
-  const router = useRouter()
 
   const [selectedSeccionId, setSelectedSeccionId] = useState<string>('')
   const [sesionesClase, setSesionesClase] = useState<Sesion[]>([])
@@ -402,25 +401,7 @@ export default function ReportesClient({ usuario, secciones }: Props) {
   return (
     <div className="min-h-screen flex bg-[#F8F9FF] font-sans">
 
-      {/* Sidebar */}
-      <aside className="w-[60px] bg-[#1A1A2E] flex flex-col items-center py-6 justify-between shrink-0 sticky top-0 h-screen z-40">
-        <div className="flex flex-col gap-6 items-center w-full">
-          <div className="text-indigo-400 mb-2"><Sparkles className="h-6 w-6" /></div>
-          <Link href="/dashboard/docente" title="Dashboard" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors">
-            <BarChartIcon className="h-5 w-5" />
-          </Link>
-          <button title="Estudiantes" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors"><Users className="h-5 w-5" /></button>
-          <button title="Clases" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors"><Calendar className="h-5 w-5" /></button>
-          <button title="Reportes" className="text-indigo-400 bg-indigo-950/60 p-2 rounded-xl transition-colors"><TrendingUp className="h-5 w-5" /></button>
-        </div>
-        <div className="flex flex-col gap-6 items-center w-full">
-          <button title="Ayuda" className="text-slate-400 hover:text-indigo-400 p-2 rounded-xl hover:bg-indigo-950/50 transition-colors"><HelpCircle className="h-5 w-5" /></button>
-          <button title="Cerrar sesión" onClick={async () => { await supabase.auth.signOut(); router.push('/login') }}
-            className="text-slate-400 hover:text-red-400 p-2 rounded-xl hover:bg-red-950/20 transition-colors">
-            <LogOut className="h-5 w-5" />
-          </button>
-        </div>
-      </aside>
+      <Sidebar />
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -432,20 +413,7 @@ export default function ReportesClient({ usuario, secciones }: Props) {
             <span className="text-slate-300 mx-1">·</span>
             <span className="text-xs font-semibold text-slate-500">Reportes</span>
           </div>
-          <div className="flex items-center gap-4">
-            <button className="p-2 rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors relative">
-              <Bell className="h-5 w-5" /><span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />
-            </button>
-            <button className="p-2 rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors"><Settings className="h-5 w-5" /></button>
-            <div className="h-8 w-px bg-slate-100" />
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-extrabold text-sm uppercase">
-                {usuario.nombre.charAt(0)}
-              </div>
-              <span className="hidden sm:inline-block max-w-[150px] truncate">{usuario.nombre}</span>
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            </div>
-          </div>
+          <HeaderPerfil nombre={usuario.nombre} />
         </header>
 
         {/* Content */}
