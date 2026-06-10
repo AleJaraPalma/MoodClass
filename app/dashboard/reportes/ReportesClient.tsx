@@ -34,6 +34,7 @@ interface Sesion {
 interface MoodData {
   id: string
   tipo: 'entrada' | 'adicional' | 'salida'
+  estado: 'activo' | 'cerrado'
   tipo_actividad?: string
   descripcion_actividad?: string
   orden: number
