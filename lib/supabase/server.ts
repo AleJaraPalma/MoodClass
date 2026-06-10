@@ -2,6 +2,10 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('[Supabase Server Client] ERROR: Faltan variables de entorno de Supabase en el servidor!')
+    throw new Error('Faltan variables de entorno de Supabase en el servidor.')
+  }
   const cookieStore = await cookies()
 
   return createServerClient(
