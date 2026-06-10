@@ -137,7 +137,7 @@ function LoginForm() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        window.location.href = '/dashboard'
+        window.location.href = redirectTo
       }
     })
   }, [supabase])
@@ -198,7 +198,7 @@ function LoginForm() {
     }
 
     // Usar window.location.href para garantizar sincronización de cookies en producción
-    window.location.href = '/dashboard'
+    window.location.href = redirectTo
   }
 
   return (

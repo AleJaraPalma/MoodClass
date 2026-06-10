@@ -49,13 +49,12 @@ export async function middleware(request: NextRequest) {
 
   const publicRoutes = ['/login', '/', '/forgot-password', '/reset-password', '/auth/callback']
   const isPublicRoute = publicRoutes.some((route) => pathname === route)
-  const isCheckinRoute = pathname.startsWith('/checkin/')
   const isApiRoute = pathname.startsWith('/api/')
   const isStaticRoute = pathname.startsWith('/_next') || pathname.startsWith('/favicon')
 
   if (isStaticRoute) return supabaseResponse
 
-  if (!user && !isPublicRoute && !isCheckinRoute && !isApiRoute) {
+  if (!user && !isPublicRoute && !isApiRoute) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/login'
     redirectUrl.searchParams.set('redirectTo', pathname)
