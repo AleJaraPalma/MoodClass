@@ -26,8 +26,9 @@ export function average(values: number[]): number {
 
 export function getCheckinUrl(sesionId: string): string {
   const base =
-    typeof window !== 'undefined'
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== 'undefined'
       ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
   return `${base}/checkin/${sesionId}`
 }

@@ -145,7 +145,8 @@ export default function LiveClient({
 
   // ── QR generation ──────────────────────────────────────────────────────────
   const generateQR = useCallback(async (moodId: string) => {
-    const url = `${window.location.origin}/checkin/${moodId}`
+    const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    const url = `${base}/checkin/${moodId}`
     const dataUrl = await QRCode.toDataURL(url, {
       width: 400, margin: 2,
       color: { dark: '#4F46E5', light: '#FFFFFF' },
@@ -416,7 +417,7 @@ export default function LiveClient({
   const moodHistorial = moods.filter(m => m.estado === 'cerrado')
 
   const checkinUrl = moodActivo
-    ? (typeof window !== 'undefined' ? `${window.location.origin}/checkin/${moodActivo.id}` : '')
+    ? `${process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')}/checkin/${moodActivo.id}`
     : ''
 
   // ── Render ────────────────────────────────────────────────────────────────

@@ -50,7 +50,8 @@ export default function AsignaturaClient({ usuario, asignatura, sesiones: initia
     // Generar QR si no tiene
     let qrDataUrl = sesion.qr_code
     if (!qrDataUrl) {
-      const checkinUrl = `${window.location.origin}/checkin/${sesion.id}`
+      const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+      const checkinUrl = `${base}/checkin/${sesion.id}`
       qrDataUrl = await QRCode.toDataURL(checkinUrl, {
         width: 400,
         margin: 2,
@@ -87,7 +88,8 @@ export default function AsignaturaClient({ usuario, asignatura, sesiones: initia
     }
 
     // Generate QR code URL
-    const checkinUrl = `${window.location.origin}/checkin/${sesion.id}`
+    const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    const checkinUrl = `${base}/checkin/${sesion.id}`
     const qrDataUrl = await QRCode.toDataURL(checkinUrl, {
       width: 400,
       margin: 2,
