@@ -356,7 +356,9 @@ export default function CheckinClient({ sesion, mood }: Props) {
         <p className="text-slate-500 text-xs leading-relaxed mb-1">
           {tipo === 'entrada'
             ? 'Responde con honestidad marcando tus niveles en estas 7 dimensiones socioemocionales.'
-            : 'Tómate un momento para reflexionar sobre los niveles en estas dimensiones al salir de clases.'}
+            : tipo === 'salida'
+            ? 'Tómate un momento para reflexionar sobre los niveles en estas dimensiones al salir de clases.'
+            : `Tómate un momento para reflexionar sobre los niveles en estas dimensiones al terminar esta actividad de ${(mood.tipo_actividad || 'hoy').toLowerCase()}.`}
         </p>
         <p className="text-slate-400 text-xs leading-relaxed mb-4">
           Ilumina las gemas según cómo te sientes en cada dimensión
