@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getOrCreatePerfil } from '@/lib/supabase/server'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -7,18 +7,10 @@ export default async function DashboardPage() {
 
   if (!user) redirect('/login')
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('rol')
-    .eq('id', user.id)
-    .single()
+  const usuario = await getOrCreatePerfil(supabase, user)
+  const rol = usuario?.rol || user.user_metadata?.rol || 'estudiante'
 
-  if (!usuario) {
-    // Profile doesn't exist yet - redirect to complete profile
-    redirect('/register')
-  }
-
-  if (usuario.rol === 'docente') {
+  if (rol === 'docente') {
     redirect('/dashboard/docente')
   } else {
     redirect('/dashboard/estudiante')

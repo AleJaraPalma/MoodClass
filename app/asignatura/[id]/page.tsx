@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getOrCreatePerfil } from '@/lib/supabase/server'
 import Navbar from '@/components/Navbar'
 import AsignaturaClient from './AsignaturaClient'
 
@@ -9,11 +9,7 @@ export default async function AsignaturaPage({ params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const usuario = await getOrCreatePerfil(supabase, user)
 
   if (!usuario) redirect('/login')
 

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getOrCreatePerfil } from '@/lib/supabase/server'
 import ReportesClient from './ReportesClient'
 
 export default async function ReportesPage() {
@@ -7,13 +7,22 @@ export default async function ReportesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const usuario = await getOrCreatePerfil(supabase, user)
 
-  if (!usuario || usuario.rol !== 'docente') redirect('/dashboard/estudiante')
+  const rol = usuario?.rol || user.user_metadata?.rol || 'estudiante'
+  if (rol !== 'docente') {
+    redirect('/dashboard/estudiante')
+  }
+
+  const fallbackUsuario = usuario || {
+    id: user.id,
+    email: user.email || '',
+    nombre: user.user_metadata?.nombre || user.email?.split('@')[0] || 'Docente',
+    rol: 'docente' as const,
+    carrera: null,
+    sede: null,
+    created_at: new Date().toISOString()
+  }
 
   // Fetch asignaturas first, then sesiones
   const { data: asignaturas } = await supabase
@@ -35,7 +44,7 @@ export default async function ReportesPage() {
 
   return (
     <ReportesClient
-      usuario={usuario}
+      usuario={fallbackUsuario}
       initialSesiones={sesiones ?? []}
       asignaturas={asignaturas ?? []}
     />

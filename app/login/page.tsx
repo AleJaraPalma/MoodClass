@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -45,8 +45,7 @@ function ChangePasswordModal({ redirectTo, onClose }: { redirectTo: string; onCl
     }
 
     toast.success('¡Contraseña actualizada exitosamente!')
-    router.push(redirectTo)
-    router.refresh()
+    window.location.href = redirectTo
   }
 
   return (
@@ -134,6 +133,15 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false)
 
+  // Auto-redirect if already logged in (handles session sync in production)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        window.location.href = redirectTo
+      }
+    })
+  }, [supabase, redirectTo])
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -174,9 +182,8 @@ function LoginForm() {
       return
     }
 
-    router.push(redirectTo)
-    router.refresh()
-    setLoading(false)
+    // Usar window.location.href para garantizar sincronización de cookies en producción
+    window.location.href = redirectTo
   }
 
   return (

@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getOrCreatePerfil } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import LiveClient from './LiveClient'
 
@@ -9,11 +9,7 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const usuario = await getOrCreatePerfil(supabase, user)
 
   if (!usuario) redirect('/login')
 

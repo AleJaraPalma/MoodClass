@@ -25,3 +25,42 @@ export async function createClient() {
     }
   )
 }
+
+export async function getOrCreatePerfil(supabase: any, user: any) {
+  if (!user) return null
+
+  try {
+    let { data: usuario } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (!usuario) {
+      const defaultRol = user.user_metadata?.rol || 'estudiante'
+      const defaultNombre = user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario'
+
+      const { data: nuevoUsuario, error: insertError } = await supabase
+        .from('usuarios')
+        .insert({
+          id: user.id,
+          email: user.email!,
+          nombre: defaultNombre,
+          rol: defaultRol,
+        })
+        .select('*')
+        .single()
+
+      if (nuevoUsuario) {
+        usuario = nuevoUsuario
+      } else {
+        console.error('Error al insertar perfil en getOrCreatePerfil:', insertError)
+      }
+    }
+
+    return usuario
+  } catch (err) {
+    console.error('Error en getOrCreatePerfil:', err)
+    return null
+  }
+}
