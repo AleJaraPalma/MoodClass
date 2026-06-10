@@ -15,7 +15,7 @@ import {
   CheckCircle2, Clock, Brain, Lightbulb, Loader2, ChevronRight,
   BarChart as BarChartIcon, Radio, Layers
 } from 'lucide-react'
-import type { Usuario } from '@/lib/types'
+import type { Usuario, Seccion } from '@/lib/types'
 import { DIMENSIONES } from '@/lib/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -26,6 +26,8 @@ interface Sesion {
   tipo_actividad: string
   estado: string
   asignatura_id: string
+  seccion_id?: string
+  clase_numero?: number
   asignaturas?: { nombre: string; codigo: string }
 }
 
@@ -52,8 +54,12 @@ interface ReporteIA {
 
 interface Props {
   usuario: Usuario
-  initialSesiones: Sesion[]
-  asignaturas: { id: string; nombre: string; codigo: string }[]
+  secciones: Seccion[]
+}
+
+const DIAS_LABEL: Record<string, string> = {
+  lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue',
+  viernes: 'Vie', sabado: 'Sáb',
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -151,12 +157,14 @@ function buildDistributionData(checkins: MoodData['checkins'], dimKey: string) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function ReportesClient({ usuario, initialSesiones, asignaturas }: Props) {
+export default function ReportesClient({ usuario, secciones }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
-  const [sesiones] = useState<Sesion[]>(initialSesiones)
-  const [selectedSesionId, setSelectedSesionId] = useState<string>(initialSesiones[0]?.id ?? '')
+  const [selectedSeccionId, setSelectedSeccionId] = useState<string>('')
+  const [sesionesClase, setSesionesClase] = useState<Sesion[]>([])
+  const [loadingSesiones, setLoadingSesiones] = useState(false)
+  const [selectedSesionId, setSelectedSesionId] = useState<string>('')
   const [tab, setTab] = useState<'mood' | 'resumen' | 'historico'>('mood')
   const [moodsData, setMoodsData] = useState<MoodData[]>([])
   const [totalInscritos, setTotalInscritos] = useState(0)
@@ -166,7 +174,59 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
   const [loadingIA, setLoadingIA] = useState(false)
   const [historicoData, setHistoricoData] = useState<{ fecha: string; avg: number; sesion_id: string }[]>([])
 
-  const selectedSesion = sesiones.find(s => s.id === selectedSesionId)
+  const selectedSesion = sesionesClase.find(s => s.id === selectedSesionId)
+
+  // ── Load clases (sesiones con datos) for selected curso ──────────────────
+
+  const loadSesionesClase = useCallback(async (seccionId: string) => {
+    setLoadingSesiones(true)
+    setSesionesClase([])
+    setSelectedSesionId('')
+    setMoodsData([])
+    setSelectedMoodId(null)
+    setReporteIA(null)
+
+    try {
+      const { data: sesionesRaw } = await supabase
+        .from('sesiones')
+        .select('*, asignaturas(nombre, codigo)')
+        .eq('seccion_id', seccionId)
+        .order('fecha', { ascending: false })
+
+      if (!sesionesRaw?.length) return
+
+      const sesionIds = sesionesRaw.map(s => s.id)
+      const { data: moods } = await supabase
+        .from('moods')
+        .select('id, sesion_id')
+        .in('sesion_id', sesionIds)
+
+      const moodIds = (moods ?? []).map(m => m.id)
+      let sesionIdsConDatos = new Set<string>()
+
+      if (moodIds.length) {
+        const { data: checkins } = await supabase
+          .from('mood_checkins')
+          .select('mood_id')
+          .in('mood_id', moodIds)
+
+        const moodIdsConRespuestas = new Set((checkins ?? []).map(c => c.mood_id))
+        sesionIdsConDatos = new Set(
+          (moods ?? [])
+            .filter(m => moodIdsConRespuestas.has(m.id))
+            .map(m => m.sesion_id)
+        )
+      }
+
+      setSesionesClase(sesionesRaw.filter(s => sesionIdsConDatos.has(s.id)))
+    } finally {
+      setLoadingSesiones(false)
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    if (selectedSeccionId) loadSesionesClase(selectedSeccionId)
+  }, [selectedSeccionId, loadSesionesClase])
 
   // ── Load mood data for selected session ──────────────────────────────────
 
@@ -205,10 +265,12 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
       }))
 
       setMoodsData(enriched)
-      setSelectedMoodId(enriched[0]?.id ?? null)
+
+      const moodsConDatos = enriched.filter(m => m.estado === 'cerrado' || m.checkins.length > 0)
+      setSelectedMoodId(moodsConDatos[0]?.id ?? enriched[0]?.id ?? null)
 
       // Load total inscritos
-      const sesion = sesiones.find(s => s.id === sesionId)
+      const sesion = sesionesClase.find(s => s.id === sesionId)
       if (sesion?.asignatura_id) {
         const { count } = await supabase
           .from('inscripciones')
@@ -219,7 +281,7 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
     } finally {
       setLoadingData(false)
     }
-  }, [sesiones, supabase])
+  }, [sesionesClase, supabase])
 
   useEffect(() => {
     if (selectedSesionId) loadSesionData(selectedSesionId)
@@ -292,6 +354,7 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const selectedMood = moodsData.find(m => m.id === selectedMoodId) ?? null
+  const moodsConDatos = moodsData.filter(m => m.estado === 'cerrado' || m.checkins.length > 0)
   const allCheckins = moodsData.flatMap(m => m.checkins)
   const globalAvgs = calcMoodAvgs(allCheckins)
 
@@ -398,38 +461,99 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
             </div>
           </div>
 
-          {/* Session selector */}
+          {/* Cascading selectors: Curso → Clase → Mood */}
           <div className="card p-5 bg-white border border-slate-100 shadow-sm rounded-2xl mb-6 anim-fade-up">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                <BookOpen className="h-4 w-4" /> Sesión:
-              </div>
-              <div className="flex-1 relative">
-                <select
-                  value={selectedSesionId}
-                  onChange={e => setSelectedSesionId(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 pr-9"
-                >
-                  {sesiones.length === 0 && <option value="">Sin sesiones disponibles</option>}
-                  {sesiones.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.asignaturas?.nombre ?? 'Sin asignatura'} — {s.fecha} {s.tipo_actividad ? `(${s.tipo_actividad})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Curso */}
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  <BookOpen className="h-4 w-4" /> Curso
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedSeccionId}
+                    onChange={e => setSelectedSeccionId(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 pr-9"
+                  >
+                    <option value="">Selecciona un curso</option>
+                    {secciones.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre_asignatura}
+                        {s.subseccion ? ` — ${s.subseccion}` : ''}
+                        {' '}({DIAS_LABEL[s.dia_semana] ?? s.dia_semana} {s.hora_inicio?.slice(0, 5)})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                </div>
               </div>
 
-              {/* Session quick stats */}
-              {allCheckins.length > 0 && (
-                <div className="flex gap-4 text-xs font-bold">
-                  <span className="text-emerald-600">{allCheckins.length}<span className="text-slate-400 font-normal"> resp.</span></span>
-                  <span className="text-slate-400">/</span>
-                  <span className="text-slate-600">{totalInscritos}<span className="text-slate-400 font-normal"> inscritos</span></span>
-                  <span className="text-indigo-600">{moodsData.length}<span className="text-slate-400 font-normal"> moods</span></span>
+              {/* Clase */}
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  <Calendar className="h-4 w-4" /> Clase
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedSesionId}
+                    onChange={e => setSelectedSesionId(e.target.value)}
+                    disabled={!selectedSeccionId || loadingSesiones}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 pr-9 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {!selectedSeccionId && <option value="">Primero elige un curso</option>}
+                    {selectedSeccionId && loadingSesiones && <option value="">Cargando clases...</option>}
+                    {selectedSeccionId && !loadingSesiones && (
+                      <>
+                        <option value="">
+                          {sesionesClase.length === 0 ? 'Sin clases con datos' : 'Selecciona una clase'}
+                        </option>
+                        {sesionesClase.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.clase_numero ? `Clase ${s.clase_numero}` : 'Clase'} — {s.fecha} {s.tipo_actividad ? `(${s.tipo_actividad})` : ''}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                 </div>
-              )}
+              </div>
+
+              {/* Mood */}
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  <Radio className="h-4 w-4" /> Mood
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedMoodId ?? ''}
+                    onChange={e => setSelectedMoodId(e.target.value || null)}
+                    disabled={!selectedSesionId || loadingData || moodsConDatos.length === 0}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 pr-9 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {!selectedSesionId && <option value="">Primero elige una clase</option>}
+                    {selectedSesionId && loadingData && <option value="">Cargando moods...</option>}
+                    {selectedSesionId && !loadingData && moodsConDatos.length === 0 && <option value="">Sin moods con datos</option>}
+                    {selectedSesionId && !loadingData && moodsConDatos.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {moodLabel[m.tipo] ?? m.tipo} #{m.orden} ({m.checkins.length} resp.)
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
             </div>
+
+            {/* Quick stats */}
+            {allCheckins.length > 0 && (
+              <div className="flex gap-4 text-xs font-bold mt-4 pt-4 border-t border-slate-100">
+                <span className="text-emerald-600">{allCheckins.length}<span className="text-slate-400 font-normal"> resp.</span></span>
+                <span className="text-slate-400">/</span>
+                <span className="text-slate-600">{totalInscritos}<span className="text-slate-400 font-normal"> inscritos</span></span>
+                <span className="text-indigo-600">{moodsData.length}<span className="text-slate-400 font-normal"> moods</span></span>
+              </div>
+            )}
           </div>
 
           {/* Tabs */}
@@ -460,7 +584,7 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
           )}
 
           {/* Empty state */}
-          {!loadingData && moodsData.length === 0 && (
+          {!loadingData && selectedSesionId && moodsData.length === 0 && (
             <div className="card p-12 bg-white border border-slate-100 rounded-2xl flex flex-col items-center text-center">
               <BarChart2 className="h-12 w-12 text-slate-200 mb-4" />
               <h3 className="font-bold text-indigo-950 font-sora text-lg mb-2">Sin datos para esta sesión</h3>
@@ -473,26 +597,6 @@ export default function ReportesClient({ usuario, initialSesiones, asignaturas }
           {/* ═══════════════════════════════════════════════ */}
           {!loadingData && tab === 'mood' && moodsData.length > 0 && (
             <div className="space-y-6 anim-fade-up">
-
-              {/* Mood selector */}
-              <div className="flex gap-2 flex-wrap">
-                {moodsData.map((m, i) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setSelectedMoodId(m.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                      selectedMoodId === m.id
-                        ? 'text-white shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-                    }`}
-                    style={selectedMoodId === m.id ? { backgroundColor: MOOD_COLORS[i % MOOD_COLORS.length], borderColor: MOOD_COLORS[i % MOOD_COLORS.length] } : {}}
-                  >
-                    {moodLabel[m.tipo] ?? m.tipo} #{m.orden}
-                    <span className="ml-1.5 opacity-75">({m.checkins.length} resp.)</span>
-                  </button>
-                ))}
-              </div>
-
               {selectedMood && (
                 <>
                   {/* ── RADAR CHART ── */}

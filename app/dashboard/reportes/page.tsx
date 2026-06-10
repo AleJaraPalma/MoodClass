@@ -24,29 +24,16 @@ export default async function ReportesPage() {
     created_at: new Date().toISOString()
   }
 
-  // Fetch asignaturas first, then sesiones
-  const { data: asignaturas } = await supabase
-    .from('asignaturas')
+  const { data: secciones } = await supabase
+    .from('secciones')
     .select('*')
     .eq('docente_id', user.id)
-
-  const asignaturaIds = (asignaturas ?? []).map((a: { id: string }) => a.id)
-
-  const { data: sesiones } = asignaturaIds.length > 0
-    ? await supabase
-        .from('sesiones')
-        .select('*, asignaturas(nombre, codigo)')
-        .in('asignatura_id', asignaturaIds)
-        .order('fecha', { ascending: false })
-        .limit(50)
-    : { data: [] }
-
+    .order('nombre_asignatura', { ascending: true })
 
   return (
     <ReportesClient
       usuario={fallbackUsuario}
-      initialSesiones={sesiones ?? []}
-      asignaturas={asignaturas ?? []}
+      secciones={secciones ?? []}
     />
   )
 }
