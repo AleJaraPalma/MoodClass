@@ -23,8 +23,8 @@ export async function middleware(request: NextRequest) {
           )
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) => {
-            const { domain, ...cookieOptions } = options
-            supabaseResponse.cookies.set(name, value, cookieOptions)
+            const { domain, sameSite, ...cookieOptions } = options
+            supabaseResponse.cookies.set(name, value, { ...cookieOptions, sameSite: 'lax' })
           })
         },
       },
@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
     console.log(`[Middleware] Usuario autenticado: ${user ? user.email : 'Ninguno'}`)
   }
 
-  const publicRoutes = ['/login', '/', '/forgot-password', '/reset-password']
+  const publicRoutes = ['/login', '/', '/forgot-password', '/reset-password', '/auth/callback']
   const isPublicRoute = publicRoutes.some((route) => pathname === route)
   const isCheckinRoute = pathname.startsWith('/checkin/')
   const isApiRoute = pathname.startsWith('/api/')

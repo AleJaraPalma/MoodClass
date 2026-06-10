@@ -20,8 +20,8 @@ export async function GET(request: Request) {
           setAll(cookiesToSet) {
             try {
               cookiesToSet.forEach(({ name, value, options }) => {
-                const { domain, ...cookieOptions } = options
-                cookieStore.set(name, value, cookieOptions)
+                const { domain, sameSite, ...cookieOptions } = options
+                cookieStore.set(name, value, { ...cookieOptions, sameSite: 'lax' })
               })
             } catch {
               // The `setAll` method was called from a Server Component.

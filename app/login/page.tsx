@@ -137,10 +137,10 @@ function LoginForm() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        window.location.href = redirectTo
+        window.location.href = '/dashboard'
       }
     })
-  }, [supabase, redirectTo])
+  }, [supabase])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -183,7 +183,7 @@ function LoginForm() {
     }
 
     // Usar window.location.href para garantizar sincronización de cookies en producción
-    window.location.href = redirectTo
+    window.location.href = '/dashboard'
   }
 
   return (
