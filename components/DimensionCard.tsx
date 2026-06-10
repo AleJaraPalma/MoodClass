@@ -61,17 +61,15 @@ export default function DimensionCard({
 
       {/* Scale labels */}
       <div className="flex justify-between items-center mt-3 px-1 text-[11px] font-medium tracking-wide">
-        <span className="text-slate-300">−</span>
-        {currentLabel && (
-          <span className="font-bold uppercase tracking-wider text-[10px] transition-all duration-300 px-2.5 py-0.5 rounded-full"
-            style={{
-              color: dimension.color,
-              backgroundColor: `${dimension.color}12`
-            }}>
-            {currentLabel}
-          </span>
-        )}
-        <span className="text-slate-300">+</span>
+        <span className="text-slate-400 text-lg font-bold leading-none">−</span>
+        <span className="font-bold uppercase tracking-wider text-[10px] transition-all duration-300 px-2.5 py-0.5 rounded-full"
+          style={{
+            color: currentLabel ? dimension.color : 'var(--text-muted)',
+            backgroundColor: currentLabel ? `${dimension.color}12` : 'var(--bg-subtle)'
+          }}>
+          {currentLabel || 'Ilumina las gemas'}
+        </span>
+        <span className="text-slate-400 text-lg font-bold leading-none">+</span>
       </div>
     </div>
   )
