@@ -146,7 +146,22 @@ function LoginForm() {
     e.preventDefault()
     setLoading(true)
 
+    console.log('[Login] window.location.origin:', window.location.origin)
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+    console.log('[Login] signInWithPassword result:', {
+      hasUser: !!data?.user,
+      hasSession: !!data?.session,
+      userEmail: data?.user?.email,
+      error: error ? { message: error.message, status: error.status } : null,
+      sessionExpiresAt: data?.session?.expires_at,
+    })
+
+    if (typeof document !== 'undefined') {
+      const cookieNames = document.cookie.split(';').map(c => c.split('=')[0].trim())
+      console.log('[Login] Document cookies:', cookieNames)
+    }
 
     if (error) {
       toast.error('Credenciales incorrectas. Verifica tu email y contraseña.')
