@@ -9,7 +9,7 @@ import type { Asignatura, Seccion, Sesion, Usuario, Checkin } from '@/lib/types'
 import QRCode from 'qrcode'
 import {
   BookOpen, Radio, ArrowRight, X, Clock, Calendar, Play, CheckCircle2,
-  MapPin, BookMarked, Plus, ChevronRight, LayoutGrid, Dices, Loader2,
+  MapPin, BookMarked, Plus, ChevronRight, ChevronLeft, LayoutGrid, Dices, Loader2,
   ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
@@ -32,7 +32,43 @@ const DIA_LABELS: Record<string, string> = {
   viernes: 'Viernes',
   sabado: 'Sábado',
 }
-const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21] as const
+const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22] as const
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+function parseFecha(fechaStr: string): Date {
+  const [year, month, day] = fechaStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function getMonday(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function formatWeekRange(monday: Date): string {
+  const saturday = new Date(monday)
+  saturday.setDate(monday.getDate() + 5)
+  const sameMonth = monday.getMonth() === saturday.getMonth()
+  const sameYear = monday.getFullYear() === saturday.getFullYear()
+  if (sameMonth) {
+    return `${monday.getDate()} – ${saturday.getDate()} ${MESES[monday.getMonth()]} ${monday.getFullYear()}`
+  }
+  if (sameYear) {
+    return `${monday.getDate()} ${MESES[monday.getMonth()].slice(0, 3)} – ${saturday.getDate()} ${MESES[saturday.getMonth()].slice(0, 3)} ${monday.getFullYear()}`
+  }
+  return `${monday.getDate()} ${MESES[monday.getMonth()].slice(0, 3)} ${monday.getFullYear()} – ${saturday.getDate()} ${MESES[saturday.getMonth()].slice(0, 3)} ${saturday.getFullYear()}`
+}
 
 function getTodayDia(): string {
   const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
@@ -113,6 +149,20 @@ export default function DocenteDashboardClient({
   const [iniciando, setIniciando] = useState<string | null>(null)
 
   const todayDia = getDiaSemanaFromFecha(today)
+
+  // Semana seleccionada en el calendario
+  const [weekOffset, setWeekOffset] = useState(0)
+  const currentMonday = getMonday(parseFecha(today))
+  const weekStart = new Date(currentMonday)
+  weekStart.setDate(currentMonday.getDate() + weekOffset * 7)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 5)
+  const weekStartStr = toDateStr(weekStart)
+  const weekEndStr = toDateStr(weekEnd)
+  const seccionesSemana = secciones.filter(s => {
+    if (!s.fecha_inicio_semestre || !s.fecha_fin_semestre) return true
+    return s.fecha_inicio_semestre <= weekEndStr && s.fecha_fin_semestre >= weekStartStr
+  })
 
   // Sesiones de hoy (por día de semana de la sección)
   const seccionesHoy = secciones.filter(s => s.dia_semana === todayDia)
@@ -399,8 +449,44 @@ export default function DocenteDashboardClient({
             </div>
           </div>
 
+      {/* Lista de asignaturas */}
+      {asignaturas.length > 0 && (
+        <div className="mb-10 anim-fade-up delay-2">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-indigo-500" />
+            Mis asignaturas
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {asignaturas.map(asig => (
+              <Link
+                key={asig.id}
+                href={`/asignatura/${asig.id}`}
+                className="card p-5 block bg-white hover:no-underline group relative overflow-hidden border border-slate-100"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.08), rgba(6,182,212,0.08))', border: '1px solid rgba(79,70,229,0.12)' }}>
+                    <BookOpen className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <span className="badge badge-blue">{asig.codigo}</span>
+                </div>
+                <h3 className="font-extrabold text-base text-indigo-950 mb-1 font-sora tracking-tight group-hover:text-indigo-600 transition-colors">
+                  {asig.nombre}
+                </h3>
+                {asig.descripcion && (
+                  <p className="text-xs text-slate-400 line-clamp-1 leading-relaxed">{asig.descripcion}</p>
+                )}
+                <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:gap-2 transition-all">
+                  Ver sesiones <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Clases de hoy */}
-      <div className="mb-10 anim-fade-up delay-2">
+      <div className="mb-10 anim-fade-up delay-3">
         <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-indigo-500" />
           Clases de hoy — {DIA_LABELS[todayDia] || todayDia}
@@ -482,11 +568,38 @@ export default function DocenteDashboardClient({
       </div>
 
       {/* Vista semanal de todas las secciones */}
-      <div className="anim-fade-up delay-3">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
-          <BookMarked className="h-4 w-4 text-indigo-500" />
-          Todas las secciones
-        </h2>
+      <div className="anim-fade-up delay-4">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+            <BookMarked className="h-4 w-4 text-indigo-500" />
+            Todas las secciones
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWeekOffset(w => w - 1)}
+              className="w-8 h-8 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-xs font-bold text-slate-500 min-w-[150px] text-center capitalize">
+              {formatWeekRange(weekStart)}
+            </span>
+            <button
+              onClick={() => setWeekOffset(w => w + 1)}
+              className="w-8 h-8 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            {weekOffset !== 0 && (
+              <button
+                onClick={() => setWeekOffset(0)}
+                className="px-3 h-8 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-indigo-600 transition-colors"
+              >
+                Hoy
+              </button>
+            )}
+          </div>
+        </div>
 
         {secciones.length === 0 ? (
           <div className="card p-16 text-center bg-white border border-slate-100 max-w-2xl mx-auto shadow-sm flex flex-col items-center">
@@ -502,6 +615,11 @@ export default function DocenteDashboardClient({
               + Crear primera sección
             </button>
           </div>
+        ) : seccionesSemana.length === 0 ? (
+          <div className="card p-8 text-center bg-white border border-slate-100 shadow-sm flex flex-col items-center">
+            <Clock className="h-10 w-10 text-indigo-300 mb-3" />
+            <p className="text-slate-500 text-sm font-medium">No hay secciones programadas para esta semana</p>
+          </div>
         ) : (
           <div className="flex bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden select-none">
             {/* Columna de Horas */}
@@ -511,9 +629,9 @@ export default function DocenteDashboardClient({
                   <span className="absolute right-2 -top-2 text-[9px] font-bold text-slate-400 font-mono">
                     {`${hour}:00`}
                   </span>
-                  {hour === 21 && (
+                  {hour === HOURS[HOURS.length - 1] && (
                     <span className="absolute right-2 top-14 text-[9px] font-bold text-slate-400 font-mono">
-                      22:00
+                      {`${hour + 1}:00`}
                     </span>
                   )}
                 </div>
@@ -525,7 +643,7 @@ export default function DocenteDashboardClient({
               {/* Cabecera de Días */}
               <div className="grid grid-cols-6 border-b border-slate-100 bg-slate-50/30">
                 {DIAS_SEMANA.map(dia => {
-                  const isToday = dia === todayDia
+                  const isToday = weekOffset === 0 && dia === todayDia
                   return (
                     <div key={dia} className={`py-3 text-center border-r border-slate-100 last:border-r-0 flex flex-col items-center justify-center ${isToday ? 'bg-indigo-50/40' : ''}`}>
                       <span className={`text-[10px] font-extrabold uppercase tracking-wider ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -537,7 +655,7 @@ export default function DocenteDashboardClient({
               </div>
 
               {/* Cuerpo del Calendario */}
-              <div className="relative h-[896px] grid grid-cols-6">
+              <div className="relative h-[960px] grid grid-cols-6">
                 {/* Líneas de fondo del grid (divisores de hora y 15 min) */}
                 <div className="absolute inset-0 pointer-events-none flex flex-col">
                   {HOURS.map(hour => (
@@ -552,8 +670,8 @@ export default function DocenteDashboardClient({
 
                 {/* Columnas de los días */}
                 {DIAS_SEMANA.map(dia => {
-                  const isToday = dia === todayDia
-                  const secsDelDia = secciones.filter(s => s.dia_semana === dia)
+                  const isToday = weekOffset === 0 && dia === todayDia
+                  const secsDelDia = seccionesSemana.filter(s => s.dia_semana === dia)
 
                   return (
                     <div key={dia} className={`relative border-r border-slate-100 last:border-r-0 h-full ${isToday ? 'bg-indigo-50/10' : ''}`}>
@@ -616,42 +734,6 @@ export default function DocenteDashboardClient({
           </div>
         )}
       </div>
-
-      {/* Lista de asignaturas */}
-      {asignaturas.length > 0 && (
-        <div className="mt-10 anim-fade-up delay-4">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-indigo-500" />
-            Mis asignaturas
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {asignaturas.map(asig => (
-              <Link
-                key={asig.id}
-                href={`/asignatura/${asig.id}`}
-                className="card p-5 block bg-white hover:no-underline group relative overflow-hidden border border-slate-100"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.08), rgba(6,182,212,0.08))', border: '1px solid rgba(79,70,229,0.12)' }}>
-                    <BookOpen className="h-5 w-5 text-indigo-600" />
-                  </div>
-                  <span className="badge badge-blue">{asig.codigo}</span>
-                </div>
-                <h3 className="font-extrabold text-base text-indigo-950 mb-1 font-sora tracking-tight group-hover:text-indigo-600 transition-colors">
-                  {asig.nombre}
-                </h3>
-                {asig.descripcion && (
-                  <p className="text-xs text-slate-400 line-clamp-1 leading-relaxed">{asig.descripcion}</p>
-                )}
-                <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:gap-2 transition-all">
-                  Ver sesiones <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Modal: nueva sección */}
       {showSeccionModal && (
