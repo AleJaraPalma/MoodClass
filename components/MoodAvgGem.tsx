@@ -38,7 +38,7 @@ interface MoodAvgGemProps {
   size?: number
 }
 
-export default function MoodAvgGem({ avg, size = 90 }: MoodAvgGemProps) {
+export default function MoodAvgGem({ avg, size = 60 }: MoodAvgGemProps) {
   const hasData = avg !== null
   const v = hasData ? Math.max(1, Math.min(5, avg)) : 3
   const pct = ((v - 1) / 4) * 100
@@ -49,13 +49,13 @@ export default function MoodAvgGem({ avg, size = 90 }: MoodAvgGemProps) {
   const glowColor = `rgba(${r}, ${g}, ${b}, ${glowOpacity})`
 
   return (
-    <div className="w-full pt-20 pb-1 px-2">
+    <div className="w-full pt-16 pb-1 px-2">
       {/* Gema flotante + número */}
       <div
         className="absolute top-0 flex flex-col items-center"
         style={{ left: `${pct}%`, transform: 'translateX(-50%)' }}
       >
-        <div className="text-3xl font-extrabold font-sora leading-none mb-1 whitespace-nowrap" style={{ color: hasData ? color : '#94A3B8' }}>
+        <div className="text-2xl font-extrabold font-sora leading-none mb-1 whitespace-nowrap" style={{ color: hasData ? color : '#94A3B8' }}>
           {hasData ? avg!.toFixed(1) : '—'}
         </div>
         <GemDisplay color={hasData ? color : '#CBD5E1'} glowColor={glowColor} lit={hasData} size={size} />

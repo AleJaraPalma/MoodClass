@@ -562,7 +562,7 @@ export default function LiveClient({
                 <div className="text-3xl font-extrabold font-sora leading-none text-slate-400">
                   {totalInscritos - respondidos}
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Conectados</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Por responder</div>
               </div>
             </div>
 
@@ -575,7 +575,7 @@ export default function LiveClient({
               }}
             >
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Mood promedio</div>
-              <MoodAvgGem avg={moodAvg} size={84} />
+              <MoodAvgGem avg={moodAvg} size={60} />
             </div>
           </div>
 
