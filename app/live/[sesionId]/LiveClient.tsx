@@ -123,7 +123,7 @@ export default function LiveClient({
   initialInscritos,
   neverLoggedIn = [],
 }: Props) {
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const router = useRouter()
 
   const [sesion, setSesion] = useState(initialSesion)
