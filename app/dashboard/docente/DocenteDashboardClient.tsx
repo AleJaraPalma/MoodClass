@@ -519,38 +519,53 @@ export default function DocenteDashboardClient({
             </div>
           </div>
 
-      {/* Lista de asignaturas */}
-      {asignaturas.length > 0 && (
+      {/* Lista de secciones */}
+      {secciones.length > 0 && (
         <div className="mb-10 anim-fade-up delay-2">
           <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-indigo-500" />
-            Mis asignaturas
+            Mis Secciones
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {asignaturas.map(asig => (
-              <Link
-                key={asig.id}
-                href={`/asignatura/${asig.id}`}
-                className="card p-5 block bg-white hover:no-underline group relative overflow-hidden border border-slate-100"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.08), rgba(6,182,212,0.08))', border: '1px solid rgba(79,70,229,0.12)' }}>
-                    <BookOpen className="h-5 w-5 text-indigo-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {secciones.map(seccion => {
+              const asig = asignaturas.find(a => a.codigo === seccion.codigo_asignatura)
+              return (
+                <Link
+                  key={seccion.id}
+                  href={`/asignatura/${asig?.id || '#'}`}
+                  className="card p-5 block bg-white hover:no-underline group relative overflow-hidden border border-slate-100"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                      style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.08), rgba(6,182,212,0.08))', border: '1px solid rgba(79,70,229,0.12)' }}>
+                      <BookOpen className="h-5 w-5 text-indigo-600" />
+                    </div>
+                    <span className="badge badge-blue text-[10px]">{seccion.codigo_asignatura}</span>
                   </div>
-                  <span className="badge badge-blue">{asig.codigo}</span>
-                </div>
-                <h3 className="font-extrabold text-base text-indigo-950 mb-1 font-sora tracking-tight group-hover:text-indigo-600 transition-colors">
-                  {asig.nombre}
-                </h3>
-                {asig.descripcion && (
-                  <p className="text-xs text-slate-400 line-clamp-1 leading-relaxed">{asig.descripcion}</p>
-                )}
-                <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:gap-2 transition-all">
-                  Ver sesiones <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-                </div>
-              </Link>
-            ))}
+                  <h3 className="font-extrabold text-base text-indigo-950 mb-1.5 font-sora tracking-tight group-hover:text-indigo-600 transition-colors line-clamp-2">
+                    {seccion.nombre_asignatura}
+                  </h3>
+                  {seccion.subseccion && (
+                    <span className="badge badge-cyan text-[10px] mb-2">Secc. {seccion.subseccion}</span>
+                  )}
+                  <div className="mt-2 space-y-1.5 text-xs text-slate-500 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      {DIA_LABELS[seccion.dia_semana] || seccion.dia_semana} {seccion.hora_inicio.substring(0, 5)} – {seccion.hora_fin.substring(0, 5)}
+                    </div>
+                    {seccion.sala && (
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        {seccion.sala}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:gap-2 transition-all">
+                    Ver sesiones <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       )}
