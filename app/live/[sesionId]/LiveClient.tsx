@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
-import MoodAvgGem, { getMoodPhrase } from '@/components/MoodAvgGem'
+import MoodAvgGem from '@/components/MoodAvgGem'
 
 // ── Dimension icons ──────────────────────────────────────────────────────────
 const DIM_ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -568,21 +568,14 @@ export default function LiveClient({
 
             {/* Mood Promedio — destacado */}
             <div
-              className="card p-5 col-span-2 lg:col-span-2 border-2 shadow-sm rounded-2xl flex items-center gap-5"
+              className="card p-5 pt-4 col-span-2 lg:col-span-2 border-2 shadow-sm rounded-2xl relative flex flex-col justify-end"
               style={{
                 borderColor: 'rgba(99,102,241,0.18)',
                 background: 'linear-gradient(135deg, rgba(79,70,229,0.05), rgba(6,182,212,0.05))',
               }}
             >
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Mood promedio</div>
               <MoodAvgGem avg={moodAvg} size={84} />
-              <div>
-                <div className="text-4xl font-extrabold font-sora leading-none text-indigo-950">
-                  {moodAvg !== null ? moodAvg.toFixed(1) : '—'}
-                </div>
-                <div className="text-xs font-bold text-slate-500 mt-2 leading-snug">
-                  {getMoodPhrase(moodAvg)}
-                </div>
-              </div>
             </div>
           </div>
 
@@ -682,9 +675,10 @@ export default function LiveClient({
             <div className="card p-6 bg-white border border-slate-100 shadow-sm rounded-2xl anim-fade-up delay-3">
               <h3 className="font-extrabold text-indigo-950 font-sora mb-5 text-base flex items-center gap-2">
                 {moodActivo
-                  ? <><PlayCircle className="h-5 w-5 text-orange-500" /> {moodLabel[moodActivo.tipo] ?? 'Mood'}</>
-                  : <><Clock className="h-5 w-5 text-slate-400" /> Sin mood activo</>
+                  ? <PlayCircle className="h-5 w-5 text-orange-500" />
+                  : <Clock className="h-5 w-5 text-slate-400" />
                 }
+                Detalle de promedio por dimensiones
               </h3>
 
               {avgCheckins ? (

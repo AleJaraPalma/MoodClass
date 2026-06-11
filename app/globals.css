@@ -551,6 +551,16 @@ a.link:hover { color: var(--accent-cyan); }
   animation: gemPulse 2.5s ease-in-out infinite;
 }
 
+/* Gema estática (no interactiva), p. ej. card de mood promedio */
+.gem-display {
+  display: inline-flex;
+  --gem-glow: rgba(99,102,241,0.5);
+}
+
+.gem-display.lit {
+  animation: gemPulse 2.5s ease-in-out infinite;
+}
+
 /* ============================================================
    CHECKIN PAGE — Mobile first, light premium
 ============================================================ */
