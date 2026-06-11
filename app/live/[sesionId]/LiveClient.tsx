@@ -9,13 +9,14 @@ import { DIMENSIONES } from '@/lib/types'
 import AgregarMoodModal, { type AgregarMoodData } from '@/components/AgregarMoodModal'
 import QRCode from 'qrcode'
 import {
-  BookOpen, Radio, Users, Clock, Check, X, Camera, RefreshCw, Lock,
+  BookOpen, Radio, Users, Clock, Check, X, Camera,
   Target, Zap, Heart, Brain, Shield, Sprout, Sparkles,
-  Plus, Ticket, AlertTriangle, CheckCircle2, Circle, Wifi,
-  PlayCircle, PauseCircle, StopCircle
+  Plus, Ticket, AlertTriangle, CheckCircle2, Circle,
+  PlayCircle, PauseCircle
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
+import MoodAvgGem, { getMoodPhrase } from '@/components/MoodAvgGem'
 
 // ── Dimension icons ──────────────────────────────────────────────────────────
 const DIM_ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -258,12 +259,25 @@ export default function LiveClient({
       if (error) { toast.error('Error cerrando mood'); return }
 
       setMoods(prev => prev.map(m => m.id === moodActivo.id ? { ...m, estado: 'cerrado' } : m))
-      setMoodActivo(null)
       setMoodEstados([])
       setMoodCheckins([])
       setQrDataUrl(null)
       setShowQR(false)
-      toast.success('Mood terminado.')
+
+      // El Ticket de Salida cierra automáticamente la clase completa
+      if (moodActivo.tipo === 'salida') {
+        await supabase
+          .from('sesiones')
+          .update({ estado: 'cerrada', estado_clase: 'cerrada' })
+          .eq('id', sesion.id)
+        setSesion(prev => ({ ...prev, estado: 'cerrada', estado_clase: 'cerrada' }))
+        toast.success('Ticket de salida cerrado. Clase finalizada.')
+        router.push(`/asignatura/${sesion.asignatura_id}`)
+      } else {
+        toast.success('Mood terminado.')
+      }
+
+      setMoodActivo(null)
     } finally {
       setWorking(false)
     }
@@ -366,20 +380,6 @@ export default function LiveClient({
     }
   }
 
-  async function handleCerrarClase() {
-    setWorking(true)
-    try {
-      await supabase
-        .from('sesiones')
-        .update({ estado: 'cerrada', estado_clase: 'cerrada' })
-        .eq('id', sesion.id)
-      toast.success('Clase cerrada.')
-      router.push(`/asignatura/${sesion.asignatura_id}`)
-    } finally {
-      setWorking(false)
-    }
-  }
-
   async function handleMarcarAtraso(estudianteId: string) {
     const { error } = await supabase
       .from('asistencia')
@@ -415,6 +415,11 @@ export default function LiveClient({
 
   // Mood history (closed ones)
   const moodHistorial = moods.filter(m => m.estado === 'cerrado')
+
+  // Average mood for the active mood's checkins
+  const moodAvg = moodCheckins.length > 0
+    ? moodCheckins.reduce((s, c) => s + calcAvgCheckin(c), 0) / moodCheckins.length
+    : null
 
   const checkinUrl = moodActivo
     ? `${process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')}/checkin/${moodActivo.id}`
@@ -480,12 +485,6 @@ export default function LiveClient({
                 {showQR ? <><X className="h-3.5 w-3.5" /> Ocultar QR</> : <><Camera className="h-3.5 w-3.5" /> Proyectar QR</>}
               </button>
 
-              {/* Refresh manual */}
-              <button onClick={() => fetchLiveData()} disabled={working}
-                className="btn-secondary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
-                <RefreshCw className="h-3.5 w-3.5 text-indigo-600" /> Actualizar
-              </button>
-
               {/* Conditional: mood activo → Terminar Mood */}
               {moodActivo && (
                 <button onClick={handleTerminarMood} disabled={working}
@@ -508,11 +507,6 @@ export default function LiveClient({
                     className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
                     style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}>
                     <Ticket className="h-3.5 w-3.5" /> Ticket Salida
-                  </button>
-                  <button onClick={handleCerrarClase} disabled={working}
-                    className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
-                    style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.2)' }}>
-                    <Lock className="h-3.5 w-3.5" /> Cerrar Clase
                   </button>
                 </>
               )}
@@ -561,50 +555,32 @@ export default function LiveClient({
               </div>
             </div>
 
-            {/* Pendientes */}
+            {/* Conectados */}
             <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
               <Circle className="h-6 w-6 text-slate-300" />
               <div className="mt-4">
                 <div className="text-3xl font-extrabold font-sora leading-none text-slate-400">
                   {totalInscritos - respondidos}
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Pendientes</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Conectados</div>
               </div>
             </div>
 
-            {/* Mood Promedio */}
-            <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
-              <Wifi className="h-6 w-6 text-indigo-400" />
-              <div className="mt-4">
-                {moodCheckins.length > 0 ? (() => {
-                  const avg = moodCheckins.reduce((s, c) => s + calcAvgCheckin(c), 0) / moodCheckins.length
-                  return (
-                    <>
-                      <div className="text-3xl font-extrabold font-sora leading-none" style={{ color: moodColor(avg) }}>
-                        {avg.toFixed(1)}
-                      </div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Mood promedio / 5</div>
-                    </>
-                  )
-                })() : (
-                  <>
-                    <div className="text-3xl font-extrabold font-sora leading-none text-slate-300">—</div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Mood promedio</div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Mood activo / historial */}
-            <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
-              {moodActivo
-                ? <PlayCircle className="h-6 w-6 text-orange-500" />
-                : <StopCircle className="h-6 w-6 text-slate-300" />
-              }
-              <div className="mt-4">
-                <div className="text-3xl font-extrabold font-sora leading-none text-indigo-950">{moods.length}</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">
-                  {moodActivo ? `${moodLabel[moodActivo.tipo]} activo` : 'Moods en sesión'}
+            {/* Mood Promedio — destacado */}
+            <div
+              className="card p-5 col-span-2 lg:col-span-2 border-2 shadow-sm rounded-2xl flex items-center gap-5"
+              style={{
+                borderColor: 'rgba(99,102,241,0.18)',
+                background: 'linear-gradient(135deg, rgba(79,70,229,0.05), rgba(6,182,212,0.05))',
+              }}
+            >
+              <MoodAvgGem avg={moodAvg} size={84} />
+              <div>
+                <div className="text-4xl font-extrabold font-sora leading-none text-indigo-950">
+                  {moodAvg !== null ? moodAvg.toFixed(1) : '—'}
+                </div>
+                <div className="text-xs font-bold text-slate-500 mt-2 leading-snug">
+                  {getMoodPhrase(moodAvg)}
                 </div>
               </div>
             </div>

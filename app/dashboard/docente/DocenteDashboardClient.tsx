@@ -10,16 +10,22 @@ import QRCode from 'qrcode'
 import {
   BookOpen, Radio, ArrowRight, X, Clock, Calendar, Play, CheckCircle2,
   MapPin, BookMarked, Plus, ChevronRight, ChevronLeft, LayoutGrid, Dices, Loader2,
-  ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown
+  ArrowDownCircle, ArrowUpCircle, Smile, Meh, Frown, AlertTriangle, Ticket, Lock
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
+
+type SesionConSeccion = Sesion & {
+  asignaturas?: { nombre: string; codigo: string }
+  secciones?: { hora_fin: string } | { hora_fin: string }[] | null
+}
 
 interface Props {
   usuario: Usuario
   secciones: Seccion[]
   asignaturas: Asignatura[]
-  sesionesActivas: (Sesion & { asignaturas?: { nombre: string; codigo: string } })[]
+  sesionesActivas: SesionConSeccion[]
+  salidasCerradas: string[]
   today: string
 }
 
@@ -97,6 +103,7 @@ export default function DocenteDashboardClient({
   secciones: initialSecciones,
   asignaturas: initialAsignaturas,
   sesionesActivas: initialSesionesActivas,
+  salidasCerradas,
   today
 }: Props) {
   const supabase = createClient()
@@ -199,6 +206,36 @@ export default function DocenteDashboardClient({
   // Encontrar sesión activa/programada para una sección hoy
   function getSesionDeSecccion(seccionId: string) {
     return sesionesActivas.find(s => s.seccion_id === seccionId && s.fecha === today)
+  }
+
+  // Clases en curso cuya hora de fin ya pasó y no tienen ticket de salida cerrado
+  function horaFinPasada(fecha: string, horaFin: string): boolean {
+    const [year, month, day] = fecha.split('-').map(Number)
+    const [h, m] = horaFin.split(':').map(Number)
+    const fin = new Date(year, month - 1, day, h, m)
+    return new Date() > fin
+  }
+
+  const clasesSinCerrar = sesionesActivas.filter(s => {
+    if (s.estado_clase !== 'en_curso') return false
+    if (salidasCerradas.includes(s.id)) return false
+    const seccionRaw = s.secciones
+    const seccionObj = Array.isArray(seccionRaw) ? seccionRaw[0] : seccionRaw
+    if (!seccionObj?.hora_fin) return false
+    return horaFinPasada(s.fecha, seccionObj.hora_fin)
+  })
+
+  async function handleCerrarSinTicket(sesionId: string) {
+    const { error } = await supabase
+      .from('sesiones')
+      .update({ estado: 'cerrada', estado_clase: 'cerrada' })
+      .eq('id', sesionId)
+    if (error) {
+      toast.error('Error al cerrar la clase')
+      return
+    }
+    setSesionesActivas(prev => prev.map(s => s.id === sesionId ? { ...s, estado: 'cerrada', estado_clase: 'cerrada' } : s))
+    toast.success('Clase cerrada sin ticket de salida.')
   }
 
   async function handleIniciarClase(seccion: Seccion) {
@@ -397,6 +434,39 @@ export default function DocenteDashboardClient({
               </button>
             </div>
           </div>
+
+          {/* Banner: clases en curso sin ticket de salida y sin cerrar */}
+          {clasesSinCerrar.length > 0 && (
+            <div className="mb-8 anim-fade-up space-y-3">
+              {clasesSinCerrar.map(s => {
+                const fecha = parseFecha(s.fecha)
+                const fechaStr = fecha.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
+                return (
+                  <div key={s.id} className="card p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-900">
+                        La clase <strong>{s.asignaturas?.nombre || 'Asignatura'}</strong> del {fechaStr} no tiene ticket de salida y no ha sido cerrada.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Link
+                        href={`/live/${s.id}`}
+                        className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
+                        style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}>
+                        <Ticket className="h-3.5 w-3.5" /> Hacer ticket de salida
+                      </Link>
+                      <button
+                        onClick={() => handleCerrarSinTicket(s.id)}
+                        className="btn-secondary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
+                        <Lock className="h-3.5 w-3.5 text-slate-500" /> Cerrar sin ticket
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Cards de métricas superiores (4 en fila) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 anim-fade-up delay-1">

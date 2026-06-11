@@ -43,9 +43,22 @@ export default async function DocenteDashboardPage() {
   const today = new Date().toISOString().split('T')[0]
   const { data: sesionesHoy } = await supabase
     .from('sesiones')
-    .select('*, asignaturas(nombre, codigo)')
+    .select('*, asignaturas(nombre, codigo), secciones(hora_fin)')
     .in('estado', ['programada', 'activa', 'entrada_cerrada'])
     .order('fecha', { ascending: true })
+
+  // Sesiones en curso para detectar clases sin ticket de salida y sin cerrar
+  const sesionesEnCurso = (sesionesHoy || []).filter(s => s.estado_clase === 'en_curso')
+  let salidasCerradas: string[] = []
+  if (sesionesEnCurso.length > 0) {
+    const { data: moodsSalida } = await supabase
+      .from('moods')
+      .select('sesion_id')
+      .in('sesion_id', sesionesEnCurso.map(s => s.id))
+      .eq('tipo', 'salida')
+      .eq('estado', 'cerrado')
+    salidasCerradas = (moodsSalida || []).map(m => m.sesion_id)
+  }
 
   return (
     <div className="min-h-screen">
@@ -55,6 +68,7 @@ export default async function DocenteDashboardPage() {
         secciones={secciones || []}
         asignaturas={asignaturas || []}
         sesionesActivas={sesionesHoy || []}
+        salidasCerradas={salidasCerradas}
         today={today}
       />
     </div>
