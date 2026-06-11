@@ -471,27 +471,27 @@ export default function LiveClient({
             </div>
 
             {/* ── Action buttons ── */}
-            <div className="flex gap-3 flex-wrap items-center">
+            <div className="flex gap-2 flex-wrap items-center justify-end">
               {/* Always: QR toggle */}
               <button
                 onClick={() => { if (!showQR && moodActivo) generateQR(moodActivo.id); setShowQR(v => !v) }}
-                className="btn-secondary px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                className="btn-secondary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
               >
-                {showQR ? <><X className="h-4 w-4" /> Ocultar QR</> : <><Camera className="h-4 w-4" /> Proyectar QR</>}
+                {showQR ? <><X className="h-3.5 w-3.5" /> Ocultar QR</> : <><Camera className="h-3.5 w-3.5" /> Proyectar QR</>}
               </button>
 
               {/* Refresh manual */}
               <button onClick={() => fetchLiveData()} disabled={working}
-                className="btn-secondary px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <RefreshCw className="h-4 w-4 text-indigo-600" /> Actualizar
+                className="btn-secondary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
+                <RefreshCw className="h-3.5 w-3.5 text-indigo-600" /> Actualizar
               </button>
 
               {/* Conditional: mood activo → Terminar Mood */}
               {moodActivo && (
                 <button onClick={handleTerminarMood} disabled={working}
-                  className="btn-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                  className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
                   style={{ background: 'linear-gradient(135deg, #F97316, #EA580C)', boxShadow: '0 4px 12px rgba(249,115,22,0.25)' }}>
-                  <PauseCircle className="h-4 w-4" />
+                  <PauseCircle className="h-3.5 w-3.5" />
                   {working ? 'Terminando...' : 'Terminar Mood'}
                 </button>
               )}
@@ -500,19 +500,19 @@ export default function LiveClient({
               {!moodActivo && sesion.estado_clase === 'en_curso' && (
                 <>
                   <button onClick={() => setShowAgregarModal(true)} disabled={working}
-                    className="btn-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                    className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
                     style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)', boxShadow: '0 4px 12px rgba(59,130,246,0.25)' }}>
-                    <Plus className="h-4 w-4" /> Agregar Mood
+                    <Plus className="h-3.5 w-3.5" /> Agregar Mood
                   </button>
                   <button onClick={handleIniciarTicketSalida} disabled={working}
-                    className="btn-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                    className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
                     style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}>
-                    <Ticket className="h-4 w-4" /> Ticket Salida
+                    <Ticket className="h-3.5 w-3.5" /> Ticket Salida
                   </button>
                   <button onClick={handleCerrarClase} disabled={working}
-                    className="btn-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                    className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
                     style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.2)' }}>
-                    <Lock className="h-4 w-4" /> Cerrar Clase
+                    <Lock className="h-3.5 w-3.5" /> Cerrar Clase
                   </button>
                 </>
               )}
