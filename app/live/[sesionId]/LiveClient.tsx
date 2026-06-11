@@ -606,12 +606,13 @@ export default function LiveClient({
                     const nombre = usuarioObj?.nombre ?? ''
                     const displayName = nombre || 'Sin nombre'
                     const estudiante_id = ins.estudiante_id
-                    const isNeverLoggedIn = neverLoggedIn.includes(estudiante_id)
                     const estado = estadoMap.get(estudiante_id)
                     const checkin = checkinMap.get(estudiante_id)
                     const avg = checkin ? calcAvgCheckin(checkin) : null
                     const topDim = checkin ? topDimension(checkin) : null
                     const isActivo = estado?.estado === 'activo'
+                    // "Sin activar" sólo si no hay actividad reciente que lo contradiga
+                    const isNeverLoggedIn = neverLoggedIn.includes(estudiante_id) && !checkin && !isActivo
 
                     const isAtraso = moodActivo?.tipo === 'salida' && checkin && !moods.some(m => m.tipo === 'entrada')
 
