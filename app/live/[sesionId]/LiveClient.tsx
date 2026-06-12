@@ -12,7 +12,7 @@ import {
   BookOpen, Radio, Users, Clock, Check, X, Camera,
   Target, Zap, Heart, Brain, Shield, Sprout, Sparkles,
   Plus, Ticket, AlertTriangle, CheckCircle2, Circle,
-  PlayCircle, PauseCircle
+  PlayCircle, PauseCircle, MessageCircle, BarChart2
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
@@ -140,6 +140,8 @@ export default function LiveClient({
   const [mounted, setMounted] = useState(false)
   const [showAtrasoModal, setShowAtrasoModal] = useState<string | null>(null) // estudiante_id
   const [showAgregarModal, setShowAgregarModal] = useState(false)
+  const [comentarioModal, setComentarioModal] = useState<{ nombre: string; texto: string } | null>(null)
+  const [reporteListo, setReporteListo] = useState<{ moodId: string; tipo: string } | null>(null)
 
   // Track if we already initialized (auto-create first mood)
   const initialized = useRef(false)
@@ -258,29 +260,60 @@ export default function LiveClient({
       const { error } = await supabase.rpc('cerrar_mood', { p_mood_id: moodActivo.id })
       if (error) { toast.error('Error cerrando mood'); return }
 
-      setMoods(prev => prev.map(m => m.id === moodActivo.id ? { ...m, estado: 'cerrado' } : m))
+      const closedMoodId = moodActivo.id
+      const closedMoodTipo = moodActivo.tipo
+
+      setMoods(prev => prev.map(m => m.id === closedMoodId ? { ...m, estado: 'cerrado' } : m))
       setMoodEstados([])
       setMoodCheckins([])
       setQrDataUrl(null)
       setShowQR(false)
 
       // El Ticket de Salida cierra automáticamente la clase completa
-      if (moodActivo.tipo === 'salida') {
+      if (closedMoodTipo === 'salida') {
         await supabase
           .from('sesiones')
           .update({ estado: 'cerrada', estado_clase: 'cerrada' })
           .eq('id', sesion.id)
         setSesion(prev => ({ ...prev, estado: 'cerrada', estado_clase: 'cerrada' }))
         toast.success('Ticket de salida cerrado. Clase finalizada.')
-        router.push(`/asignatura/${sesion.asignatura_id}`)
       } else {
         toast.success('Mood terminado.')
       }
 
       setMoodActivo(null)
+
+      // Generar el reporte de IA automáticamente (una sola vez, inmutable)
+      try {
+        await fetch('/api/generar-reporte', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mood_id: closedMoodId }),
+        })
+      } catch {
+        // Si falla, el docente puede revisarlo desde Reportes igualmente
+      }
+
+      setReporteListo({ moodId: closedMoodId, tipo: closedMoodTipo })
     } finally {
       setWorking(false)
     }
+  }
+
+  function handleVerReporte() {
+    if (!reporteListo) return
+    const params = new URLSearchParams()
+    if (sesion.seccion_id) params.set('seccion', sesion.seccion_id)
+    params.set('sesion', sesion.id)
+    params.set('mood', reporteListo.moodId)
+    setReporteListo(null)
+    router.push(`/dashboard/reportes?${params.toString()}`)
+  }
+
+  function handleCerrarReporteModal() {
+    const wasSalida = reporteListo?.tipo === 'salida'
+    setReporteListo(null)
+    if (wasSalida) router.push(`/asignatura/${sesion.asignatura_id}`)
   }
 
   // Called by AgregarMoodModal after Claude generates questions and user confirms
@@ -615,18 +648,23 @@ export default function LiveClient({
                     const isNeverLoggedIn = neverLoggedIn.includes(estudiante_id) && !checkin && !isActivo
 
                     const isAtraso = moodActivo?.tipo === 'salida' && checkin && !moods.some(m => m.tipo === 'entrada')
+                    const tieneComentario = !!checkin?.campo_abierto?.trim()
 
                     return (
                       <div
                         key={estudiante_id}
-                        className="relative text-center p-3 bg-slate-50/60 border border-slate-100 rounded-2xl flex flex-col items-center gap-1.5 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
+                        onClick={() => tieneComentario && setComentarioModal({ nombre: displayName, texto: checkin!.campo_abierto! })}
+                        className={`relative text-center p-3 bg-slate-50/60 border border-slate-100 rounded-2xl flex flex-col items-center gap-1.5 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ${tieneComentario ? 'cursor-pointer' : ''}`}
                       >
                         {/* Avatar con iniciales */}
                         <AvatarCircle nombre={displayName} isActivo={isActivo} neverLoggedIn={isNeverLoggedIn} />
 
                         {/* Nombre — primer nombre + primer apellido */}
-                        <div className="text-[10px] font-bold text-slate-700 truncate w-full leading-tight text-center px-1">
+                        <div className="text-[10px] font-bold text-slate-700 truncate w-full leading-tight text-center px-1 flex items-center justify-center gap-1">
                           {displayName.split(' ').slice(0, 2).join(' ')}
+                          {tieneComentario && (
+                            <MessageCircle className="h-3 w-3 text-indigo-400 shrink-0" />
+                          )}
                         </div>
 
                         {/* Estado / score */}
@@ -784,6 +822,60 @@ export default function LiveClient({
           onClose={() => setShowAgregarModal(false)}
           onConfirm={handleConfirmarMood}
         />
+      )}
+
+      {/* ── Comentario Modal ── */}
+      {comentarioModal && (
+        <div className="modal-overlay" onClick={() => setComentarioModal(null)}>
+          <div className="card p-8 max-w-sm w-full mx-4 bg-white shadow-2xl rounded-2xl anim-scale-in"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
+                <MessageCircle className="h-5 w-5 text-indigo-500" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-indigo-950 font-sora text-base">{comentarioModal.nombre}</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider font-bold">Respuesta abierta</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-4 italic">
+              &ldquo;{comentarioModal.texto}&rdquo;
+            </p>
+            <button onClick={() => setComentarioModal(null)}
+              className="w-full btn-secondary py-2.5 text-xs font-bold uppercase tracking-wider mt-5">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reporte Listo Modal ── */}
+      {reporteListo && (
+        <div className="modal-overlay">
+          <div className="card p-8 max-w-sm w-full mx-4 bg-white shadow-2xl rounded-2xl anim-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-indigo-950 font-sora text-base">Mood cerrado</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">El análisis de IA está listo.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleCerrarReporteModal}
+                className="flex-1 btn-secondary py-2.5 text-xs font-bold uppercase tracking-wider">
+                Cerrar
+              </button>
+              <button onClick={handleVerReporte}
+                className="flex-1 btn-primary py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
+                <BarChart2 className="h-3.5 w-3.5" />
+                Ver reporte del mood
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

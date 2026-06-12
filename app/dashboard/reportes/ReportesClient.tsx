@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -8,10 +9,10 @@ import {
   ResponsiveContainer, Cell
 } from 'recharts'
 import {
-  BarChart2, TrendingUp, Calendar, Sparkles,
+  BarChart2, TrendingUp, Calendar,
   ChevronDown, BookOpen, AlertTriangle,
-  CheckCircle2, Clock, Brain, Lightbulb, Loader2, ChevronRight,
-  BarChart as BarChartIcon, Radio, Layers
+  CheckCircle2, Clock, Brain, Loader2, ChevronRight,
+  BarChart as BarChartIcon, Radio, Layers, MessageSquare
 } from 'lucide-react'
 import type { Usuario, Seccion } from '@/lib/types'
 import { DIMENSIONES } from '@/lib/types'
@@ -40,6 +41,8 @@ interface MoodData {
   orden: number
   created_at: string
   closed_at?: string
+  reporte_ia?: string | null
+  reporte_ia_generado_at?: string | null
   checkins: {
     estudiante_id: string
     energia: number; foco: number; animo: number; claridad: number
@@ -51,6 +54,13 @@ interface MoodData {
 interface ReporteIA {
   resumen: string
   recomendaciones: { titulo: string; descripcion: string; urgencia: string }[]
+  generado_at?: string | null
+  pendiente?: boolean
+}
+
+interface InscritoNombre {
+  estudiante_id: string
+  nombre: string
 }
 
 interface Props {
@@ -160,18 +170,27 @@ function buildDistributionData(checkins: MoodData['checkins'], dimKey: string) {
 
 export default function ReportesClient({ usuario, secciones }: Props) {
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
-  const [selectedSeccionId, setSelectedSeccionId] = useState<string>('')
+  // Preselección desde la vista en vivo (al cerrar un mood): ?seccion=&sesion=&mood=
+  const presetSeccionRef = useRef<string | null>(searchParams.get('seccion'))
+  const presetSesionRef = useRef<string | null>(searchParams.get('sesion'))
+  const presetMoodRef = useRef<string | null>(searchParams.get('mood'))
+
+  const [selectedSeccionId, setSelectedSeccionId] = useState<string>(() =>
+    presetSeccionRef.current && secciones.some(s => s.id === presetSeccionRef.current)
+      ? presetSeccionRef.current
+      : ''
+  )
   const [sesionesClase, setSesionesClase] = useState<Sesion[]>([])
   const [loadingSesiones, setLoadingSesiones] = useState(false)
   const [selectedSesionId, setSelectedSesionId] = useState<string>('')
   const [tab, setTab] = useState<'mood' | 'resumen' | 'historico'>('mood')
   const [moodsData, setMoodsData] = useState<MoodData[]>([])
   const [totalInscritos, setTotalInscritos] = useState(0)
+  const [inscritosNombres, setInscritosNombres] = useState<InscritoNombre[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [selectedMoodId, setSelectedMoodId] = useState<string | null>(null)
-  const [reporteIA, setReporteIA] = useState<ReporteIA | null>(null)
-  const [loadingIA, setLoadingIA] = useState(false)
   const [historicoData, setHistoricoData] = useState<{ fecha: string; avg: number; sesion_id: string }[]>([])
 
   const selectedSesion = sesionesClase.find(s => s.id === selectedSesionId)
@@ -184,7 +203,6 @@ export default function ReportesClient({ usuario, secciones }: Props) {
     setSelectedSesionId('')
     setMoodsData([])
     setSelectedMoodId(null)
-    setReporteIA(null)
 
     try {
       const { data: sesionesRaw } = await supabase
@@ -218,7 +236,21 @@ export default function ReportesClient({ usuario, secciones }: Props) {
         )
       }
 
-      setSesionesClase(sesionesRaw.filter(s => sesionIdsConDatos.has(s.id)))
+      let finalSesiones = sesionesRaw.filter(s => sesionIdsConDatos.has(s.id))
+
+      // Garantiza que la sesión preseleccionada (recién cerrada desde Vivo) aparezca
+      const presetSesionId = presetSesionRef.current
+      if (presetSesionId && !finalSesiones.some(s => s.id === presetSesionId)) {
+        const presetSes = sesionesRaw.find(s => s.id === presetSesionId)
+        if (presetSes) finalSesiones = [presetSes, ...finalSesiones]
+      }
+
+      setSesionesClase(finalSesiones)
+
+      if (presetSesionId && finalSesiones.some(s => s.id === presetSesionId)) {
+        setSelectedSesionId(presetSesionId)
+        presetSesionRef.current = null
+      }
     } finally {
       setLoadingSesiones(false)
     }
@@ -233,7 +265,6 @@ export default function ReportesClient({ usuario, secciones }: Props) {
   const loadSesionData = useCallback(async (sesionId: string) => {
     if (!sesionId) return
     setLoadingData(true)
-    setReporteIA(null)
     setSelectedMoodId(null)
 
     try {
@@ -266,17 +297,30 @@ export default function ReportesClient({ usuario, secciones }: Props) {
 
       setMoodsData(enriched)
 
-      const moodsConDatos = enriched.filter(m => m.estado === 'cerrado' || m.checkins.length > 0)
-      setSelectedMoodId(moodsConDatos[0]?.id ?? enriched[0]?.id ?? null)
+      const presetMoodId = presetMoodRef.current
+      if (presetMoodId && enriched.some(m => m.id === presetMoodId)) {
+        setSelectedMoodId(presetMoodId)
+        presetMoodRef.current = null
+      } else {
+        const moodsConDatos = enriched.filter(m => m.estado === 'cerrado' || m.checkins.length > 0)
+        setSelectedMoodId(moodsConDatos[0]?.id ?? enriched[0]?.id ?? null)
+      }
 
-      // Load total inscritos
+      // Load inscritos (nombres + total) de la asignatura
       const sesion = sesionesClase.find(s => s.id === sesionId)
       if (sesion?.asignatura_id) {
-        const { count } = await supabase
+        const { data: inscritosRaw } = await supabase
           .from('inscripciones')
-          .select('*', { count: 'exact', head: true })
+          .select('estudiante_id, usuarios(nombre)')
           .eq('asignatura_id', sesion.asignatura_id)
-        setTotalInscritos(count ?? 0)
+
+        const inscritos: InscritoNombre[] = (inscritosRaw ?? []).map(i => {
+          const usuarioRaw = i.usuarios as { nombre: string }[] | { nombre: string } | null
+          const usuarioObj = Array.isArray(usuarioRaw) ? usuarioRaw[0] : usuarioRaw
+          return { estudiante_id: i.estudiante_id, nombre: usuarioObj?.nombre ?? 'Sin nombre' }
+        })
+        setInscritosNombres(inscritos)
+        setTotalInscritos(inscritos.length)
       }
     } finally {
       setLoadingData(false)
@@ -321,39 +365,14 @@ export default function ReportesClient({ usuario, secciones }: Props) {
     if (tab === 'historico') loadHistorico()
   }, [tab, loadHistorico])
 
-  // ── Generate IA report ────────────────────────────────────────────────────
-
-  async function handleGenerarReporte() {
-    if (!moodsData.length) return
-    setLoadingIA(true)
-    try {
-      const allCheckins = moodsData.flatMap(m => m.checkins)
-      const promedios = calcMoodAvgs(allCheckins)
-      const campos = allCheckins.map(c => c.campo_abierto).filter(Boolean) as string[]
-
-      const res = await fetch('/api/generar-reporte', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          promedios,
-          campos_abiertos: campos,
-          tipo_actividad: selectedSesion?.tipo_actividad ?? 'Clase',
-          respondieron: allCheckins.length,
-          total_alumnos: totalInscritos,
-          nombre_asignatura: selectedSesion?.asignaturas?.nombre,
-        }),
-      })
-
-      const data = await res.json()
-      setReporteIA(data)
-    } finally {
-      setLoadingIA(false)
-    }
-  }
-
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const selectedMood = moodsData.find(m => m.id === selectedMoodId) ?? null
+
+  // Reporte IA: inmutable, ya guardado en el mood al momento de cerrarlo
+  const reporteIA: ReporteIA | null = selectedMood?.reporte_ia
+    ? { ...JSON.parse(selectedMood.reporte_ia), generado_at: selectedMood.reporte_ia_generado_at }
+    : null
   const moodsConDatos = moodsData.filter(m => m.estado === 'cerrado' || m.checkins.length > 0)
   const allCheckins = moodsData.flatMap(m => m.checkins)
   const globalAvgs = calcMoodAvgs(allCheckins)
@@ -783,21 +802,16 @@ export default function ReportesClient({ usuario, secciones }: Props) {
                   <div className="card p-6 bg-white border border-slate-100 shadow-sm rounded-2xl">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-extrabold text-indigo-950 font-sora text-base flex items-center gap-2">
-                        <Brain className="h-5 w-5 text-indigo-600" /> Análisis con IA
-                        <span className="text-[10px] font-normal text-slate-400 ml-1">claude-sonnet-4-5</span>
+                        <Brain className="h-5 w-5 text-indigo-600" /> Análisis de las respuestas
                       </h3>
-                      <button
-                        onClick={handleGenerarReporte}
-                        disabled={loadingIA}
-                        className="btn-primary px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
-                        style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)', boxShadow: '0 4px 12px rgba(79,70,229,0.2)' }}
-                      >
-                        {loadingIA ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                        {loadingIA ? 'Analizando...' : reporteIA ? 'Regenerar' : 'Generar análisis'}
-                      </button>
                     </div>
 
-                    {reporteIA ? (
+                    {selectedMood.estado !== 'cerrado' ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <Clock className="h-10 w-10 text-slate-200 mb-3" />
+                        <p className="text-sm font-bold text-slate-400">El análisis estará disponible cuando se cierre este mood.</p>
+                      </div>
+                    ) : reporteIA ? (
                       <div className="space-y-5">
                         {/* Resumen */}
                         <div className="p-5 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100">
@@ -833,14 +847,48 @@ export default function ReportesClient({ usuario, secciones }: Props) {
                             })}
                           </div>
                         </div>
+
+                        {/* Nota de generación — inmutable */}
+                        {reporteIA.generado_at && (
+                          <p className="text-[10px] text-slate-300 text-right">
+                            Generado el {new Date(reporteIA.generado_at).toLocaleString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'medium', timeStyle: 'short' })}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <Lightbulb className="h-10 w-10 text-slate-200 mb-3" />
-                        <p className="text-sm font-bold text-slate-400">Genera un análisis automático con IA</p>
-                        <p className="text-xs text-slate-300 mt-1 max-w-xs">Claude analizará los promedios y comentarios para darte recomendaciones pedagógicas personalizadas</p>
+                        <Brain className="h-10 w-10 text-slate-200 mb-3" />
+                        <p className="text-sm font-bold text-slate-400">Sin análisis de IA disponible para este mood.</p>
                       </div>
                     )}
+                  </div>
+
+                  {/* ── RESPUESTAS ABIERTAS ── */}
+                  <div className="card p-6 bg-white border border-slate-100 shadow-sm rounded-2xl">
+                    <h3 className="font-extrabold text-indigo-950 font-sora mb-1 text-base flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5 text-indigo-600" /> Respuestas abiertas
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mb-4">Comentarios de los estudiantes en este mood</p>
+                    <div className="space-y-2">
+                      {inscritosNombres.map(({ estudiante_id, nombre }) => {
+                        const checkin = selectedMood.checkins.find(c => c.estudiante_id === estudiante_id)
+                        const texto = checkin?.campo_abierto?.trim()
+                        return (
+                          <div key={estudiante_id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
+                            <span className="text-xs font-bold text-slate-700 w-40 shrink-0 truncate pt-0.5">{nombre}</span>
+                            {checkin ? (
+                              texto ? (
+                                <p className="text-xs text-slate-600 leading-relaxed italic flex-1">&ldquo;{texto}&rdquo;</p>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">Sin comentario</span>
+                              )
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">No respondió</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 </>
               )}

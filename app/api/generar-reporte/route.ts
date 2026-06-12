@@ -1,59 +1,101 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const DIM_NAMES: Record<string, string> = {
+  energia: 'Energía', foco: 'Foco', animo: 'Ánimo', claridad: 'Claridad',
+  confianza: 'Confianza', motivacion: 'Motivación', memoria: 'Memoria',
+}
+const DIM_KEYS = ['energia', 'foco', 'animo', 'claridad', 'confianza', 'motivacion', 'memoria']
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const {
-      promedios,          // { energia: 3.2, foco: 4.1, ... }
-      campos_abiertos,    // string[]
-      tipo_actividad,
-      respondieron,
-      total_alumnos,
-      nombre_asignatura,
-      moods_info,         // [{ tipo, tipo_actividad, promedios }]
-    } = body
-
-    if (!promedios || !tipo_actividad) {
-      return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 })
+    const { mood_id } = await req.json()
+    if (!mood_id) {
+      return NextResponse.json({ error: 'Falta mood_id' }, { status: 400 })
     }
 
-    const dimNames = ['Energía', 'Foco', 'Ánimo', 'Claridad', 'Confianza', 'Motivación', 'Memoria']
-    const dimKeys =  ['energia', 'foco', 'animo', 'claridad', 'confianza', 'motivacion', 'memoria']
+    const supabase = await createClient()
 
-    // Dimensiones críticas (bajo 2.5)
-    const criticas = dimKeys.filter(k => (promedios[k] ?? 0) < 2.5)
-    const bajas = dimKeys.filter(k => (promedios[k] ?? 0) >= 2.5 && (promedios[k] ?? 0) < 3.2)
-    const altas = dimKeys.filter(k => (promedios[k] ?? 0) >= 4.0)
+    const { data: mood, error: moodErr } = await supabase
+      .from('moods')
+      .select('*, sesiones(asignatura_id, tipo_actividad, asignaturas(nombre))')
+      .eq('id', mood_id)
+      .single()
 
-    const promedioGeneral = dimKeys.reduce((s, k) => s + (promedios[k] ?? 0), 0) / 7
+    if (moodErr || !mood) {
+      return NextResponse.json({ error: 'Mood no encontrado' }, { status: 404 })
+    }
 
-    // Muestra de comentarios (máx 15 para no inflar el prompt)
-    const muestraComentarios = (campos_abiertos || [])
-      .filter((t: string) => t && t.trim().length > 3)
+    // Reporte ya generado: inmutable, se devuelve tal cual
+    if (mood.reporte_ia) {
+      const parsed = JSON.parse(mood.reporte_ia)
+      return NextResponse.json({
+        resumen: parsed.resumen,
+        recomendaciones: parsed.recomendaciones,
+        generado_at: mood.reporte_ia_generado_at,
+      })
+    }
+
+    // Solo se genera al cerrar el mood
+    if (mood.estado !== 'cerrado') {
+      return NextResponse.json({ pendiente: true }, { status: 200 })
+    }
+
+    const sesionInfo = mood.sesiones as unknown as { asignatura_id: string; tipo_actividad: string; asignaturas?: { nombre: string } } | null
+    const asignaturaId = sesionInfo?.asignatura_id
+
+    const { data: checkins } = await supabase
+      .from('mood_checkins')
+      .select('*')
+      .eq('mood_id', mood_id)
+
+    const { count: totalAlumnos } = asignaturaId
+      ? await supabase.from('inscripciones').select('*', { count: 'exact', head: true }).eq('asignatura_id', asignaturaId)
+      : { count: 0 }
+
+    const promedios: Record<string, number> = {}
+    DIM_KEYS.forEach(k => {
+      promedios[k] = checkins?.length
+        ? checkins.reduce((s, c) => s + (c[k] ?? 0), 0) / checkins.length
+        : 0
+    })
+
+    const criticas = DIM_KEYS.filter(k => promedios[k] < 2.5)
+    const bajas = DIM_KEYS.filter(k => promedios[k] >= 2.5 && promedios[k] < 3.2)
+    const altas = DIM_KEYS.filter(k => promedios[k] >= 4.0)
+    const promedioGeneral = DIM_KEYS.reduce((s, k) => s + promedios[k], 0) / 7
+
+    const muestraComentarios = (checkins ?? [])
+      .map(c => c.campo_abierto)
+      .filter((t): t is string => !!t && t.trim().length > 3)
       .slice(0, 15)
+
+    const respondieron = checkins?.length ?? 0
+    const totalAlumnosNum = totalAlumnos ?? 0
+    const nombreAsignatura = sesionInfo?.asignaturas?.nombre ?? 'Sin especificar'
+    const tipoActividad = mood.tipo_actividad ?? sesionInfo?.tipo_actividad ?? 'Clase'
 
     const prompt = `Eres un psicólogo educativo experto en bienestar estudiantil en contextos universitarios técnicos (INACAP).
 
 ## Datos de la sesión
-- **Asignatura:** ${nombre_asignatura ?? 'Sin especificar'}
-- **Tipo de actividad:** ${tipo_actividad}
-- **Participación:** ${respondieron} de ${total_alumnos} alumnos respondieron (${Math.round((respondieron/total_alumnos)*100)}%)
+- **Asignatura:** ${nombreAsignatura}
+- **Tipo de actividad:** ${tipoActividad}
+- **Participación:** ${respondieron} de ${totalAlumnosNum} alumnos respondieron (${totalAlumnosNum > 0 ? Math.round((respondieron / totalAlumnosNum) * 100) : 0}%)
 - **Promedio general:** ${promedioGeneral.toFixed(1)}/5
 
 ## Promedios por dimensión (escala 1-5)
-${dimKeys.map(k => {
-  const v = promedios[k]?.toFixed(1) ?? '—'
-  const dim = dimNames[dimKeys.indexOf(k)]
+${DIM_KEYS.map(k => {
+  const v = promedios[k].toFixed(1)
   const flag = criticas.includes(k) ? ' ⚠️ CRÍTICO' : bajas.includes(k) ? ' ↘ bajo' : altas.includes(k) ? ' ✓ bien' : ''
-  return `- ${dim}: ${v}${flag}`
+  return `- ${DIM_NAMES[k]}: ${v}${flag}`
 }).join('\n')}
 
-${criticas.length > 0 ? `## Dimensiones críticas (<2.5): ${criticas.map(k => dimNames[dimKeys.indexOf(k)]).join(', ')}` : ''}
+${criticas.length > 0 ? `## Dimensiones críticas (<2.5): ${criticas.map(k => DIM_NAMES[k]).join(', ')}` : ''}
 
-${muestraComentarios.length > 0 ? `## Comentarios abiertos de los alumnos (muestra)\n${muestraComentarios.map((t: string, i: number) => `${i+1}. "${t}"`).join('\n')}` : '## Sin comentarios abiertos esta sesión'}
+${muestraComentarios.length > 0 ? `## Comentarios abiertos de los alumnos (muestra)\n${muestraComentarios.map((t, i) => `${i + 1}. "${t}"`).join('\n')}` : '## Sin comentarios abiertos esta sesión'}
 
 ## Tu tarea
 1. Escribe un **resumen diagnóstico** del estado socioemocional del curso en exactamente 2-3 oraciones. Sé empático, preciso y accionable. Menciona lo que se observa en los datos, no solo las dimensiones.
@@ -86,40 +128,49 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
   ]
 }`
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    })
+    let resumen: string
+    let recomendaciones: { titulo: string; descripcion: string; urgencia: string }[]
 
-    const textBlock = message.content.find(b => b.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') throw new Error('No text response from Claude')
+    try {
+      const message = await client.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }],
+      })
 
-    const jsonMatch = textBlock.text.trim().match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON found in response')
+      const textBlock = message.content.find(b => b.type === 'text')
+      if (!textBlock || textBlock.type !== 'text') throw new Error('No text response from Claude')
 
-    const parsed = JSON.parse(jsonMatch[0])
+      const jsonMatch = textBlock.text.trim().match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('No JSON found in response')
 
-    return NextResponse.json({
-      resumen: parsed.resumen,
-      recomendaciones: parsed.recomendaciones,
-      meta: {
-        modelo: 'claude-sonnet-4-5-20250929',
-        promedio_general: promedioGeneral,
-        dimensiones_criticas: criticas,
-      },
-    })
+      const parsed = JSON.parse(jsonMatch[0])
+      resumen = parsed.resumen
+      recomendaciones = parsed.recomendaciones
+    } catch (iaErr) {
+      console.error('[/api/generar-reporte] IA error:', iaErr)
+      resumen = 'No fue posible generar el análisis automático en este momento.'
+      recomendaciones = [
+        { titulo: 'Revisar dimensiones bajas', descripcion: 'Identifica las dimensiones con promedios menores a 3.0 y prioriza actividades de reencuadre emocional.', urgencia: 'media' },
+        { titulo: 'Apertura de diálogo', descripcion: 'Destina 5 minutos al inicio de la próxima clase para preguntar cómo llegaron los estudiantes.', urgencia: 'baja' },
+        { titulo: 'Seguimiento individual', descripcion: 'Contacta proactivamente a los alumnos que no respondieron el check-in.', urgencia: 'baja' },
+      ]
+    }
+
+    const reporte = { resumen, recomendaciones }
+    const generadoAt = new Date().toISOString()
+
+    await supabase
+      .from('moods')
+      .update({ reporte_ia: JSON.stringify(reporte), reporte_ia_generado_at: generadoAt })
+      .eq('id', mood_id)
+
+    return NextResponse.json({ resumen, recomendaciones, generado_at: generadoAt })
   } catch (err) {
     console.error('[/api/generar-reporte] Error:', err)
     return NextResponse.json({
       error: 'Error generando reporte',
       detail: err instanceof Error ? err.message : String(err),
-      resumen: 'No fue posible generar el análisis automático en este momento.',
-      recomendaciones: [
-        { titulo: 'Revisar dimensiones bajas', descripcion: 'Identifica las dimensiones con promedios menores a 3.0 y prioriza actividades de reencuadre emocional.', urgencia: 'media' },
-        { titulo: 'Apertura de diálogo', descripcion: 'Destina 5 minutos al inicio de la próxima clase para preguntar cómo llegaron los estudiantes.', urgencia: 'baja' },
-        { titulo: 'Seguimiento individual', descripcion: 'Contacta proactivamente a los alumnos que no respondieron el check-in.', urgencia: 'baja' },
-      ],
-    }, { status: 200 })
+    }, { status: 500 })
   }
 }

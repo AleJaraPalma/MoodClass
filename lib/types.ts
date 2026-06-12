@@ -85,6 +85,8 @@ export interface Mood {
   orden: number
   created_at: string
   closed_at?: string
+  reporte_ia?: string | null
+  reporte_ia_generado_at?: string | null
 }
 
 
