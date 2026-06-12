@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getTodaySantiago } from '@/lib/timezone'
 import toast from 'react-hot-toast'
 import type { Asignatura, Sesion, Usuario } from '@/lib/types'
 import QRCode from 'qrcode'
@@ -76,7 +77,7 @@ export default function AsignaturaClient({ usuario, asignatura, sesiones: initia
         tema: tema || null,
         objetivo: objetivo || null,
         estado: 'activa',
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: getTodaySantiago(),
       })
       .select()
       .single()

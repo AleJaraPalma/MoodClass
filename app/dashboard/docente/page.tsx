@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, getOrCreatePerfil } from '@/lib/supabase/server'
+import { getTodaySantiago } from '@/lib/timezone'
 import Navbar from '@/components/Navbar'
 import DocenteDashboardClient from './DocenteDashboardClient'
 
@@ -40,7 +41,7 @@ export default async function DocenteDashboardPage() {
     .order('created_at', { ascending: false })
 
   // Fetch sesiones de hoy para mostrar botón "Iniciar" o "En curso"
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodaySantiago()
   const { data: sesionesHoy } = await supabase
     .from('sesiones')
     .select('*, asignaturas(nombre, codigo), secciones(hora_fin)')

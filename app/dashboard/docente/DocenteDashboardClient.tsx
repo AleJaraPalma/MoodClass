@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
+import { getSantiagoDateTimeString } from '@/lib/timezone'
 
 type SesionConSeccion = Sesion & {
   asignaturas?: { nombre: string; codigo: string }
@@ -76,11 +77,6 @@ function formatWeekRange(monday: Date): string {
   return `${monday.getDate()} ${MESES[monday.getMonth()].slice(0, 3)} ${monday.getFullYear()} – ${saturday.getDate()} ${MESES[saturday.getMonth()].slice(0, 3)} ${saturday.getFullYear()}`
 }
 
-function getTodayDia(): string {
-  const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-  return days[new Date().getDay()]
-}
-
 function getDiaSemanaFromFecha(fechaStr: string): string {
   if (!fechaStr) return 'lunes'
   const [year, month, day] = fechaStr.split('-').map(Number)
@@ -90,12 +86,8 @@ function getDiaSemanaFromFecha(fechaStr: string): string {
 }
 
 function formatHora(hora: string): string {
-  // hora viene como "HH:MM:SS"
-  const [h, m] = hora.split(':')
-  const hNum = parseInt(h)
-  const ampm = hNum >= 12 ? 'PM' : 'AM'
-  const h12 = hNum % 12 || 12
-  return `${h12}:${m} ${ampm}`
+  // hora viene como "HH:MM:SS" — formato 24h (convención chilena)
+  return hora.slice(0, 5)
 }
 
 export default function DocenteDashboardClient({
@@ -210,10 +202,8 @@ export default function DocenteDashboardClient({
 
   // Clases en curso cuya hora de fin ya pasó y no tienen ticket de salida cerrado
   function horaFinPasada(fecha: string, horaFin: string): boolean {
-    const [year, month, day] = fecha.split('-').map(Number)
-    const [h, m] = horaFin.split(':').map(Number)
-    const fin = new Date(year, month - 1, day, h, m)
-    return new Date() > fin
+    const finStr = `${fecha}T${horaFin}`
+    return getSantiagoDateTimeString() > finStr
   }
 
   const clasesSinCerrar = sesionesActivas.filter(s => {
@@ -416,7 +406,7 @@ export default function DocenteDashboardClient({
                 Hola, {usuario.nombre.split(' ')[0]}
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                {new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Santiago' })}
               </p>
             </div>
             <div className="flex gap-3 flex-wrap">
