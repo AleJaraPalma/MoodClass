@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient()
 
+    const { data: { user } } = await supabase.auth.getUser()
+
     const { data: mood, error: moodErr } = await supabase
       .from('moods')
       .select('*, sesiones(asignatura_id, tipo_actividad, asignaturas(nombre))')
@@ -26,6 +28,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (moodErr || !mood) {
+      console.error('[generar-reporte] select fallo:', moodErr?.message, mood_id)
       return NextResponse.json({ error: 'Mood no encontrado' }, { status: 404 })
     }
 
@@ -160,10 +163,21 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
     const reporte = { resumen, recomendaciones }
     const generadoAt = new Date().toISOString()
 
-    await supabase
+    const { data: updateData, error: updateErr } = await supabase
       .from('moods')
       .update({ reporte_ia: JSON.stringify(reporte), reporte_ia_generado_at: generadoAt })
       .eq('id', mood_id)
+      .select()
+
+    if (updateErr || !updateData?.length) {
+      console.error(
+        '[generar-reporte] update no persistio:',
+        updateErr?.message,
+        'filas:', updateData?.length,
+        'mood_id:', mood_id,
+        'auth.uid presente:', !!user?.id
+      )
+    }
 
     return NextResponse.json({ resumen, recomendaciones, generado_at: generadoAt })
   } catch (err) {
