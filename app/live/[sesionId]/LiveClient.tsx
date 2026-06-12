@@ -867,13 +867,13 @@ export default function LiveClient({
                   <DialogDescription>El análisis está listo.</DialogDescription>
                 </div>
               </DialogHeader>
-              <DialogFooter>
+              <DialogFooter className="gap-2 sm:gap-2">
                 <button onClick={handleCerrarReporteModal}
-                  className="btn-secondary px-5 py-2.5 text-xs font-bold uppercase tracking-wider">
+                  className="btn-secondary h-10 box-border px-5 text-xs font-bold uppercase tracking-wider">
                   Cerrar
                 </button>
                 <button onClick={handleVerReporte}
-                  className="btn-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                  className="btn-primary h-10 box-border px-5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
                   style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
                   <BarChart2 className="h-3.5 w-3.5" />
                   Ver reporte del mood
@@ -891,9 +891,9 @@ export default function LiveClient({
                   <DialogDescription>El mood se cerró pero el análisis no se pudo generar. Reporta este error.</DialogDescription>
                 </div>
               </DialogHeader>
-              <DialogFooter>
+              <DialogFooter className="gap-2 sm:gap-2">
                 <button onClick={handleCerrarReporteModal}
-                  className="btn-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider"
+                  className="btn-primary h-10 box-border px-5 text-xs font-bold uppercase tracking-wider"
                   style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
                   Cerrar
                 </button>
