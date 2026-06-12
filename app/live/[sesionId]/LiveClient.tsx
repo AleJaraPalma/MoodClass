@@ -142,7 +142,7 @@ export default function LiveClient({
   const [showAtrasoModal, setShowAtrasoModal] = useState<string | null>(null) // estudiante_id
   const [showAgregarModal, setShowAgregarModal] = useState(false)
   const [comentarioModal, setComentarioModal] = useState<{ nombre: string; texto: string } | null>(null)
-  const [reporteListo, setReporteListo] = useState<{ moodId: string; tipo: string } | null>(null)
+  const [reporteListo, setReporteListo] = useState<{ moodId: string; tipo: string; ok: boolean } | null>(null)
 
   // Track if we already initialized (auto-create first mood)
   const initialized = useRef(false)
@@ -285,17 +285,20 @@ export default function LiveClient({
       setMoodActivo(null)
 
       // Generar el reporte de IA automáticamente (una sola vez, inmutable)
+      let reporteOk = false
       try {
-        await fetch('/api/generar-reporte', {
+        const res = await fetch('/api/generar-reporte', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mood_id: closedMoodId }),
         })
+        const data = await res.json()
+        reporteOk = res.ok && !data.error && !data.pendiente
       } catch {
-        // Si falla, el docente puede revisarlo desde Reportes igualmente
+        reporteOk = false
       }
 
-      setReporteListo({ moodId: closedMoodId, tipo: closedMoodTipo })
+      setReporteListo({ moodId: closedMoodId, tipo: closedMoodTipo, ok: reporteOk })
     } finally {
       setWorking(false)
     }
@@ -853,27 +856,50 @@ export default function LiveClient({
       {/* ── Reporte Listo Modal ── */}
       <Dialog open={!!reporteListo} onOpenChange={(open) => { if (!open) handleCerrarReporteModal() }}>
         <DialogContent showClose={false}>
-          <DialogHeader>
-            <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-            </div>
-            <div>
-              <DialogTitle>Mood cerrado</DialogTitle>
-              <DialogDescription>El análisis está listo.</DialogDescription>
-            </div>
-          </DialogHeader>
-          <DialogFooter>
-            <button onClick={handleCerrarReporteModal}
-              className="btn-secondary px-5 py-2.5 text-xs font-bold uppercase tracking-wider">
-              Cerrar
-            </button>
-            <button onClick={handleVerReporte}
-              className="btn-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
-              style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
-              <BarChart2 className="h-3.5 w-3.5" />
-              Ver reporte del mood
-            </button>
-          </DialogFooter>
+          {reporteListo?.ok ? (
+            <>
+              <DialogHeader>
+                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                </div>
+                <div>
+                  <DialogTitle>Mood cerrado</DialogTitle>
+                  <DialogDescription>El análisis está listo.</DialogDescription>
+                </div>
+              </DialogHeader>
+              <DialogFooter>
+                <button onClick={handleCerrarReporteModal}
+                  className="btn-secondary px-5 py-2.5 text-xs font-bold uppercase tracking-wider">
+                  Cerrar
+                </button>
+                <button onClick={handleVerReporte}
+                  className="btn-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                  style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  Ver reporte del mood
+                </button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <DialogTitle>Mood cerrado</DialogTitle>
+                  <DialogDescription>El mood se cerró pero el análisis no se pudo generar. Reporta este error.</DialogDescription>
+                </div>
+              </DialogHeader>
+              <DialogFooter>
+                <button onClick={handleCerrarReporteModal}
+                  className="btn-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider"
+                  style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
+                  Cerrar
+                </button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

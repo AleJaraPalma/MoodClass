@@ -23,10 +23,11 @@ export async function POST(req: NextRequest) {
 
     const { data: mood, error: moodErr } = await supabase
       .from('moods')
-      .select('*, sesiones(asignatura_id, tipo_actividad, asignaturas(nombre))')
+      .select('*, sesiones!moods_sesion_id_fkey(asignatura_id, tipo_actividad, asignaturas(nombre))')
       .eq('id', mood_id)
       .single()
 
+    // Diagnóstico activo para detectar fallos de update/select en moods
     if (moodErr || !mood) {
       console.error('[generar-reporte] select fallo:', moodErr?.message, mood_id)
       return NextResponse.json({ error: 'Mood no encontrado' }, { status: 404 })
@@ -169,6 +170,7 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
       .eq('id', mood_id)
       .select()
 
+    // Diagnóstico activo para detectar fallos de update/select en moods
     if (updateErr || !updateData?.length) {
       console.error(
         '[generar-reporte] update no persistio:',
