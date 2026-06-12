@@ -17,6 +17,7 @@ import {
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
 import MoodAvgGem from '@/components/MoodAvgGem'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
 // ── Dimension icons ──────────────────────────────────────────────────────────
 const DIM_ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -850,33 +851,31 @@ export default function LiveClient({
       )}
 
       {/* ── Reporte Listo Modal ── */}
-      {reporteListo && (
-        <div className="modal-overlay">
-          <div className="card p-8 max-w-sm w-full mx-4 bg-white shadow-2xl rounded-2xl anim-scale-in">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-indigo-950 font-sora text-base">Mood cerrado</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">El análisis de IA está listo.</p>
-              </div>
+      <Dialog open={!!reporteListo} onOpenChange={(open) => { if (!open) handleCerrarReporteModal() }}>
+        <DialogContent showClose={false}>
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleCerrarReporteModal}
-                className="flex-1 btn-secondary py-2.5 text-xs font-bold uppercase tracking-wider">
-                Cerrar
-              </button>
-              <button onClick={handleVerReporte}
-                className="flex-1 btn-primary py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
-                style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
-                <BarChart2 className="h-3.5 w-3.5" />
-                Ver reporte del mood
-              </button>
+            <div>
+              <DialogTitle>Mood cerrado</DialogTitle>
+              <DialogDescription>El análisis está listo.</DialogDescription>
             </div>
-          </div>
-        </div>
-      )}
+          </DialogHeader>
+          <DialogFooter>
+            <button onClick={handleCerrarReporteModal}
+              className="btn-secondary px-5 py-2.5 text-xs font-bold uppercase tracking-wider">
+              Cerrar
+            </button>
+            <button onClick={handleVerReporte}
+              className="btn-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+              style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
+              <BarChart2 className="h-3.5 w-3.5" />
+              Ver reporte del mood
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

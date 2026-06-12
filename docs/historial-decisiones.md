@@ -90,3 +90,15 @@ El subdominio moodclass.incubalab.cl tenía registros A y TXT que conflictuaban 
 
 ### QR apuntaba a localhost en producción
 El código que generaba los QR usaba window.location.origin que en el build de Vercel resolvía a localhost. Solución: usar process.env.NEXT_PUBLIC_SITE_URL como base de la URL del QR.
+
+### Reporte de IA inmutable
+El reporte de IA se genera UNA SOLA VEZ por mood, automáticamente al cerrar el mood. Queda guardado en la BD (columnas `reporte_ia` y `reporte_ia_generado_at` en la tabla `moods`) y nunca se regenera — el mood cerrado es inmutable y no recibirá más respuestas. No existen botones "Generar" ni "Regenerar". Al cerrar un mood en /live/[sesionId] aparece un botón "Ver reporte del mood" que navega a /dashboard/reportes con la cascada curso→clase→mood pre-seleccionada.
+
+### Etiqueta del modelo de IA oculta
+En la UI nunca se expone el nombre del modelo de IA (ej. claude-sonnet-4-5). El título es "Análisis de las respuestas".
+
+### Visibilidad de campos abiertos
+Las respuestas de texto libre de TODOS los moods (entrada, adicionales, salida) son visibles al docente directo. El estudiante está informado por el disclaimer al responder.
+
+### Zona horaria
+Todas las fechas relacionadas con sesiones, calendario y "hoy" se calculan en America/Santiago, no en UTC ni en la zona del navegador. Horas en formato 24h.
