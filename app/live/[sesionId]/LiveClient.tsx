@@ -262,7 +262,8 @@ export default function LiveClient({
 
       setMoods(prev => prev.map(m => m.id === closedMoodId ? { ...m, estado: 'cerrado' } : m))
       setMoodEstados([])
-      setMoodCheckins([])
+      // No limpiar moodCheckins aquí: los círculos deben seguir mostrando
+      // los resultados del mood recién cerrado hasta que se abra uno nuevo.
       setQrDataUrl(null)
       setShowQR(false)
 
