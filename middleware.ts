@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const publicRoutes = ['/login', '/', '/forgot-password', '/reset-password', '/auth/callback']
-  const isPublicRoute = publicRoutes.some((route) => pathname === route)
+  const isPublicRoute = publicRoutes.some((route) => pathname === route) || pathname.startsWith('/checkin/')
   const isApiRoute = pathname.startsWith('/api/')
   const isStaticRoute = pathname.startsWith('/_next') || pathname.startsWith('/favicon')
 
