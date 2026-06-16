@@ -34,6 +34,11 @@ export interface Seccion {
   fecha_inicio_semestre: string
   fecha_fin_semestre: string
   created_at: string
+  // Event fields (v4)
+  tipo?: 'regular' | 'evento'
+  nombre_evento?: string
+  tipo_evento?: string
+  descripcion_evento?: string
   // Joined
   asignatura?: Asignatura
 }

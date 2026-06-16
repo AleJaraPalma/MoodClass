@@ -399,6 +399,19 @@ textarea.input-field { resize: none; }
   50%       { filter: drop-shadow(0 0 18px var(--gem-glow)) drop-shadow(0 0 32px var(--gem-glow)); }
 }
 
+@keyframes aura-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2.5px white, 0 0 0 3.5px var(--aura-color, #6366F1), 0 0 12px 3px var(--aura-color, #6366F1);
+  }
+  50% {
+    box-shadow: 0 0 0 2.5px white, 0 0 0 5px var(--aura-color, #6366F1), 0 0 26px 8px var(--aura-color, #6366F1);
+  }
+}
+
+.aura-pulse {
+  animation: aura-pulse 2.5s ease-in-out infinite;
+}
+
 @keyframes gradientFlow {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }

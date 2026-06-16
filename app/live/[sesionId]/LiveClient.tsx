@@ -12,20 +12,17 @@ import {
   BookOpen, Radio, Users, Clock, Check, X, Camera,
   Target, Zap, Heart, Brain, Shield, Sprout, Sparkles,
   Plus, Ticket, AlertTriangle, CheckCircle2, Circle,
-  PlayCircle, PauseCircle, MessageCircle, BarChart2
+  PlayCircle, PauseCircle, MessageCircle, BarChart2, Calendar
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import HeaderPerfil from '@/components/HeaderPerfil'
 import MoodAvgGem from '@/components/MoodAvgGem'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
-// ── Dimension icons ──────────────────────────────────────────────────────────
 const DIM_ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   energia: Zap, foco: Target, animo: Heart,
   claridad: Brain, confianza: Shield, motivacion: Sprout, memoria: Sparkles,
 }
-
-// ── Avatar helpers ────────────────────────────────────────────────────────────
 
 function getInitials(nombre: string): string {
   const parts = nombre.trim().split(/\s+/).filter(Boolean)
@@ -35,41 +32,44 @@ function getInitials(nombre: string): string {
 }
 
 function nameToColor(nombre: string): string {
-  // Deterministic HSL color from string — same name always same color
   let hash = 0
   for (let i = 0; i < nombre.length; i++) {
     hash = nombre.charCodeAt(i) + ((hash << 5) - hash)
     hash |= 0
   }
   const h = Math.abs(hash) % 360
-  // Keep saturation and lightness in a pleasant, readable range
   return `hsl(${h}, 55%, 45%)`
 }
 
 function AvatarCircle({
-  nombre, isActivo, neverLoggedIn,
-}: { nombre: string; isActivo: boolean; neverLoggedIn?: boolean }) {
+  nombre, isActivo, neverLoggedIn, topDimColor,
+}: { nombre: string; isActivo: boolean; neverLoggedIn?: boolean; topDimColor?: string }) {
   const initials = getInitials(nombre)
-  const color = neverLoggedIn ? '#F1F5F9' : nameToColor(nombre)
+  const bgColor = neverLoggedIn ? '#F1F5F9' : nameToColor(nombre)
+
   return (
     <div
       className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-extrabold shrink-0 select-none transition-all duration-500 ${
         neverLoggedIn
           ? 'border-2 border-dashed border-slate-300 text-slate-400'
-          : `text-white ${isActivo ? 'ring-2 ring-emerald-400 ring-offset-1 shadow-[0_0_12px_3px_rgba(52,211,153,0.55)]' : ''}`
-      }`}
-      style={{ backgroundColor: color }}
+          : 'text-white'
+      } ${topDimColor ? 'aura-pulse' : ''}`}
+      style={{
+        backgroundColor: bgColor,
+        ...(topDimColor
+          ? ({ '--aura-color': topDimColor } as React.CSSProperties)
+          : isActivo
+          ? { boxShadow: '0 0 0 2px white, 0 0 0 3.5px rgba(52,211,153,0.7), 0 0 12px 3px rgba(52,211,153,0.55)' }
+          : {}),
+      }}
     >
       {initials}
     </div>
   )
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 interface InscripcionWithUser {
   estudiante_id: string
-  // Supabase returns array for nested selects without *
   usuarios: { id: string; nombre: string; email: string }[] | { id: string; nombre: string; email: string } | null
 }
 
@@ -86,9 +86,10 @@ interface Props {
   initialMoodCheckins: MoodCheckin[]
   initialInscritos: InscripcionWithUser[]
   neverLoggedIn: string[]
+  esEvento?: boolean
+  nombreEvento?: string
+  tipoEvento?: string
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function moodColor(val: number) {
   if (val >= 4) return '#10B981'
@@ -112,7 +113,14 @@ function topDimension(checkin: MoodCheckin): { key: string; color: string } {
   return { key: topKey, color: dim?.color ?? '#6366F1' }
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+function parseEventoNombre(campoAbierto: string): { nombre: string; comentario?: string } {
+  const raw = campoAbierto.replace('[EVENTO] ', '')
+  const colonIdx = raw.indexOf(': ')
+  if (colonIdx > -1) {
+    return { nombre: raw.substring(0, colonIdx), comentario: raw.substring(colonIdx + 2) }
+  }
+  return { nombre: raw }
+}
 
 export default function LiveClient({
   sesion: initialSesion,
@@ -123,6 +131,9 @@ export default function LiveClient({
   initialMoodCheckins,
   initialInscritos,
   neverLoggedIn = [],
+  esEvento = false,
+  nombreEvento,
+  tipoEvento,
 }: Props) {
   const [supabase] = useState(() => createClient())
   const router = useRouter()
@@ -139,15 +150,13 @@ export default function LiveClient({
   const [working, setWorking] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(new Date())
   const [mounted, setMounted] = useState(false)
-  const [showAtrasoModal, setShowAtrasoModal] = useState<string | null>(null) // estudiante_id
+  const [showAtrasoModal, setShowAtrasoModal] = useState<string | null>(null)
   const [showAgregarModal, setShowAgregarModal] = useState(false)
   const [comentarioModal, setComentarioModal] = useState<{ nombre: string; texto: string } | null>(null)
   const [reporteListo, setReporteListo] = useState<{ moodId: string; tipo: string; ok: boolean } | null>(null)
 
-  // Track if we already initialized (auto-create first mood)
   const initialized = useRef(false)
 
-  // ── QR generation ──────────────────────────────────────────────────────────
   const generateQR = useCallback(async (moodId: string) => {
     const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
     const url = `${base}/checkin/${moodId}`
@@ -159,7 +168,6 @@ export default function LiveClient({
     return dataUrl
   }, [])
 
-  // ── Fetch live data (auto-refresh) ────────────────────────────────────────
   const fetchLiveData = useCallback(async (currentMoodId?: string) => {
     const moodId = currentMoodId ?? moodActivo?.id
     if (!moodId) return
@@ -176,45 +184,37 @@ export default function LiveClient({
     setLastUpdate(new Date())
   }, [moodActivo?.id, sesion.id, supabase])
 
-  // ── Auto-refresh every 10s ────────────────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => fetchLiveData(), 10000)
     return () => clearInterval(interval)
   }, [fetchLiveData])
 
-  // ── Auto-initialize: create first mood on mount ───────────────────────────
   useEffect(() => {
     setMounted(true)
     if (initialized.current) return
     initialized.current = true
 
-    // If no moods yet, create the first entrance mood automatically
     if (moods.length === 0 && !moodActivo) {
       iniciarClase()
     } else if (moodActivo) {
-      // Just generate QR for existing active mood
       generateQR(moodActivo.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-
   async function iniciarClase() {
     setWorking(true)
     try {
-      // Update sesion estado_clase to en_curso
       await supabase
         .from('sesiones')
         .update({ estado: 'activa', estado_clase: 'en_curso' })
         .eq('id', sesion.id)
 
-      // Create first mood via RPC
       const { data: moodId, error: moodErr } = await supabase.rpc('crear_mood', {
         p_sesion_id: sesion.id,
         p_tipo: 'entrada',
         p_orden: 1,
-        p_tipo_actividad: 'Clase',
+        p_tipo_actividad: esEvento ? (tipoEvento || 'Evento') : 'Clase',
         p_descripcion_actividad: null,
       })
 
@@ -223,17 +223,13 @@ export default function LiveClient({
         return
       }
 
-      // Set mood_activo_id on session
       await supabase
         .from('sesiones')
         .update({ mood_activo_id: moodId })
         .eq('id', sesion.id)
 
-      // Generate QR
-      const qr = await generateQR(moodId)
-      await supabase.from('moods').update({ /* stored in session, not mood */ }).eq('id', moodId)
+      await generateQR(moodId)
 
-      // Reload moods
       const { data: nuevosEstados } = await supabase
         .from('mood_estados')
         .select('*, usuarios(nombre)')
@@ -241,14 +237,14 @@ export default function LiveClient({
 
       const newMood: Mood = {
         id: moodId, sesion_id: sesion.id, tipo: 'entrada', estado: 'activo',
-        tipo_actividad: 'Clase', orden: 1, created_at: new Date().toISOString(),
+        tipo_actividad: esEvento ? (tipoEvento || 'Evento') : 'Clase', orden: 1, created_at: new Date().toISOString(),
       }
 
       setMoods([newMood])
       setMoodActivo(newMood)
       setMoodEstados((nuevosEstados as MoodEstadoWithUser[]) || [])
       setSesion(prev => ({ ...prev, estado: 'activa', estado_clase: 'en_curso', mood_activo_id: moodId }))
-      toast.success('¡Clase iniciada! Mood de entrada activo.')
+      toast.success(esEvento ? '¡Evento iniciado! QR listo para participantes.' : '¡Clase iniciada! Mood de entrada activo.')
     } finally {
       setWorking(false)
     }
@@ -270,21 +266,19 @@ export default function LiveClient({
       setQrDataUrl(null)
       setShowQR(false)
 
-      // El Ticket de Salida cierra automáticamente la clase completa
       if (closedMoodTipo === 'salida') {
         await supabase
           .from('sesiones')
           .update({ estado: 'cerrada', estado_clase: 'cerrada' })
           .eq('id', sesion.id)
         setSesion(prev => ({ ...prev, estado: 'cerrada', estado_clase: 'cerrada' }))
-        toast.success('Ticket de salida cerrado. Clase finalizada.')
+        toast.success(esEvento ? 'Evento cerrado.' : 'Ticket de salida cerrado. Clase finalizada.')
       } else {
         toast.success('Mood terminado.')
       }
 
       setMoodActivo(null)
 
-      // Generar el reporte de IA automáticamente (una sola vez, inmutable)
       let reporteOk = false
       try {
         const res = await fetch('/api/generar-reporte', {
@@ -317,17 +311,15 @@ export default function LiveClient({
   function handleCerrarReporteModal() {
     const wasSalida = reporteListo?.tipo === 'salida'
     setReporteListo(null)
-    if (wasSalida) router.push(`/asignatura/${sesion.asignatura_id}`)
+    if (wasSalida) router.push(esEvento ? '/dashboard/docente' : `/asignatura/${sesion.asignatura_id}`)
   }
 
-  // Called by AgregarMoodModal after Claude generates questions and user confirms
   async function handleConfirmarMood(data: AgregarMoodData) {
     setShowAgregarModal(false)
     setWorking(true)
     try {
       const orden = moods.length + 1
 
-      // 1. Create mood via RPC
       const { data: moodId, error } = await supabase.rpc('crear_mood', {
         p_sesion_id: sesion.id,
         p_tipo: 'adicional',
@@ -338,7 +330,6 @@ export default function LiveClient({
 
       if (error || !moodId) { toast.error('Error creando mood: ' + error?.message); return }
 
-      // 2. Persist generated questions + metadata on the mood record
       await supabase.from('moods').update({
         preguntas: data.preguntas,
         modalidad: data.modalidad || null,
@@ -346,36 +337,24 @@ export default function LiveClient({
         complejidad: data.complejidad || null,
       }).eq('id', moodId)
 
-      // 3. Update active mood on session
       await supabase.from('sesiones').update({ mood_activo_id: moodId }).eq('id', sesion.id)
-
-      // 4. Generate QR pointing to this mood's checkin URL
       await generateQR(moodId)
 
-      // 5. Load initial mood estados
       const { data: estados } = await supabase
         .from('mood_estados').select('*, usuarios(nombre)').eq('mood_id', moodId)
 
       const newMood: Mood = {
-        id: moodId,
-        sesion_id: sesion.id,
-        tipo: 'adicional',
-        estado: 'activo',
-        tipo_actividad: data.tipo_actividad,
-        descripcion_actividad: data.descripcion_actividad,
-        modalidad: data.modalidad,
-        duracion: data.duracion,
-        complejidad: data.complejidad,
-        preguntas: data.preguntas,
-        orden,
-        created_at: new Date().toISOString(),
+        id: moodId, sesion_id: sesion.id, tipo: 'adicional', estado: 'activo',
+        tipo_actividad: data.tipo_actividad, descripcion_actividad: data.descripcion_actividad,
+        modalidad: data.modalidad, duracion: data.duracion, complejidad: data.complejidad,
+        preguntas: data.preguntas, orden, created_at: new Date().toISOString(),
       }
 
       setMoods(prev => [...prev, newMood])
       setMoodActivo(newMood)
       setMoodEstados((estados as MoodEstadoWithUser[]) || [])
       setMoodCheckins([])
-      setShowQR(true) // Auto-show QR for the new mood
+      setShowQR(true)
       toast.success(`✨ Mood "${data.tipo_actividad}" activado con preguntas personalizadas.`)
     } finally {
       setWorking(false)
@@ -430,19 +409,23 @@ export default function LiveClient({
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
-  // Map estudiante_id → estado in current mood
   const estadoMap = new Map(moodEstados.map(e => [e.estudiante_id, e]))
   const checkinMap = new Map(moodCheckins.map(c => [c.estudiante_id, c]))
 
-  const respondidos = moodCheckins.length
+  // Event participants derived from checkins (campo_abierto starts with '[EVENTO]')
+  const eventParticipants = esEvento
+    ? moodCheckins
+        .filter(c => c.campo_abierto?.startsWith('[EVENTO]'))
+        .map(c => ({ ...parseEventoNombre(c.campo_abierto!), checkin: c }))
+    : []
+
+  const respondidos = esEvento ? eventParticipants.length : moodCheckins.length
   const totalInscritos = inscritos.length
 
-  // Mood tipo label
   const moodLabel: Record<string, string> = {
     entrada: 'Entrada', adicional: 'Adicional', salida: 'Ticket de Salida',
   }
 
-  // Averages for the active mood
   const avgCheckins = moodCheckins.length > 0
     ? DIMENSIONES.reduce((acc, dim) => {
         acc[dim.key] = moodCheckins.reduce((s, c) => s + ((c as unknown as Record<string, number>)[dim.key] ?? 0), 0) / moodCheckins.length
@@ -450,10 +433,8 @@ export default function LiveClient({
       }, {} as Record<string, number>)
     : null
 
-  // Mood history (closed ones)
   const moodHistorial = moods.filter(m => m.estado === 'cerrado')
 
-  // Average mood for the active mood's checkins
   const moodAvg = moodCheckins.length > 0
     ? moodCheckins.reduce((s, c) => s + calcAvgCheckin(c), 0) / moodCheckins.length
     : null
@@ -462,16 +443,11 @@ export default function LiveClient({
     ? `${process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')}/checkin/${moodActivo.id}`
     : ''
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <div className="min-h-screen flex bg-[#F8F9FF] font-sans">
-
       <Sidebar />
 
-      {/* ── Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
-
         {/* Navbar */}
         <header className="h-16 bg-white border-b border-slate-100 shadow-sm px-6 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
@@ -479,8 +455,9 @@ export default function LiveClient({
               Mood<span className="text-indigo-600">Class</span>
             </span>
             <span className="text-slate-300">·</span>
-            <span className="text-xs font-semibold text-slate-500">Sala en Vivo</span>
-            {/* Live status badge */}
+            <span className="text-xs font-semibold text-slate-500">
+              {esEvento ? 'Evento en Vivo' : 'Sala en Vivo'}
+            </span>
             {moodActivo && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
@@ -491,30 +468,32 @@ export default function LiveClient({
           <HeaderPerfil nombre={usuario.nombre} />
         </header>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto px-8 py-8">
 
-          {/* ── Page header ── */}
+          {/* Page header */}
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8 anim-fade-up">
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-2 flex items-center gap-1.5">
-                <BookOpen className="h-3.5 w-3.5" />
-                {sesion.asignaturas?.nombre || 'Asignatura'}
-                {sesion.clase_numero && <span className="ml-1 text-slate-400">· Clase #{sesion.clase_numero}</span>}
+                {esEvento
+                  ? <><Calendar className="h-3.5 w-3.5" /> {tipoEvento || 'Evento'}</>
+                  : <><BookOpen className="h-3.5 w-3.5" /> {sesion.asignaturas?.nombre || 'Asignatura'}
+                    {sesion.clase_numero && <span className="ml-1 text-slate-400">· Clase #{sesion.clase_numero}</span>}</>
+                }
               </div>
               <h1 className="text-2xl font-extrabold text-indigo-950 font-sora flex items-center gap-3">
-                <Radio className="h-5 w-5 text-indigo-600 animate-pulse" />
-                Vista en Vivo
+                {esEvento
+                  ? <><Calendar className="h-5 w-5 text-indigo-600" /> {nombreEvento || 'Evento'}</>
+                  : <><Radio className="h-5 w-5 text-indigo-600 animate-pulse" /> Vista en Vivo</>
+                }
               </h1>
               <div className="text-slate-500 text-xs mt-1.5 flex flex-wrap gap-x-4 gap-y-1 items-center">
-                {sesion.tema && <span>Tema: <strong className="text-slate-700">{sesion.tema}</strong></span>}
+                {!esEvento && sesion.tema && <span>Tema: <strong className="text-slate-700">{sesion.tema}</strong></span>}
                 <span className="text-slate-400">Auto-refresh 10s · Último: {mounted ? lastUpdate.toLocaleTimeString('es-CL') : '--:--:--'}</span>
               </div>
             </div>
 
-            {/* ── Action buttons ── */}
+            {/* Action buttons */}
             <div className="flex gap-2 flex-wrap items-center justify-end">
-              {/* Always: QR toggle */}
               <button
                 onClick={() => { if (!showQR && moodActivo) generateQR(moodActivo.id); setShowQR(v => !v) }}
                 className="btn-secondary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
@@ -522,7 +501,6 @@ export default function LiveClient({
                 {showQR ? <><X className="h-3.5 w-3.5" /> Ocultar QR</> : <><Camera className="h-3.5 w-3.5" /> Proyectar QR</>}
               </button>
 
-              {/* Conditional: mood activo → Terminar Mood */}
               {moodActivo && (
                 <button onClick={handleTerminarMood} disabled={working}
                   className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
@@ -532,7 +510,6 @@ export default function LiveClient({
                 </button>
               )}
 
-              {/* Conditional: sin mood activo → Agregar + Ticket Salida + Cerrar */}
               {!moodActivo && sesion.estado_clase === 'en_curso' && (
                 <>
                   <button onClick={() => setShowAgregarModal(true)} disabled={working}
@@ -540,17 +517,19 @@ export default function LiveClient({
                     style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)', boxShadow: '0 4px 12px rgba(59,130,246,0.25)' }}>
                     <Plus className="h-3.5 w-3.5" /> Agregar Mood
                   </button>
-                  <button onClick={handleIniciarTicketSalida} disabled={working}
-                    className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
-                    style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}>
-                    <Ticket className="h-3.5 w-3.5" /> Ticket Salida
-                  </button>
+                  {!esEvento && (
+                    <button onClick={handleIniciarTicketSalida} disabled={working}
+                      className="btn-primary px-3 py-2 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap"
+                      style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}>
+                      <Ticket className="h-3.5 w-3.5" /> Ticket Salida
+                    </button>
+                  )}
                 </>
               )}
             </div>
           </div>
 
-          {/* ── QR Panel ── */}
+          {/* QR Panel */}
           {showQR && moodActivo && qrDataUrl && (
             <div className="card p-8 mb-8 bg-white border border-slate-100 shadow-xl flex flex-col md:flex-row items-center gap-8 anim-scale-in rounded-2xl">
               <div className="p-2 border border-slate-100 rounded-2xl bg-white shadow-sm shrink-0">
@@ -566,44 +545,59 @@ export default function LiveClient({
                 </div>
                 <h2 className="text-xl font-extrabold text-indigo-950 font-sora mb-2">QR de Check-in</h2>
                 <p className="text-slate-500 text-sm mb-4 leading-relaxed max-w-md">
-                  Proyecta este código para que los estudiantes escaneen y respondan el check-in emocional.
+                  {esEvento
+                    ? 'Proyecta este código para que los participantes escaneen y respondan el check-in emocional. No necesitan registrarse.'
+                    : 'Proyecta este código para que los estudiantes escaneen y respondan el check-in emocional.'}
                 </p>
                 <div className="p-3.5 rounded-xl font-mono text-xs break-all bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold max-w-md">
                   {checkinUrl}
                 </div>
                 <div className="mt-3 text-sm font-bold text-slate-600">
                   <span className="text-emerald-600">{respondidos}</span>
-                  <span className="text-slate-400"> / {totalInscritos} han respondido</span>
+                  {esEvento
+                    ? <span className="text-slate-400"> participantes han respondido</span>
+                    : <span className="text-slate-400"> / {totalInscritos} han respondido</span>}
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Metric Cards ── */}
+          {/* Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8 anim-fade-up delay-1">
-            {/* Respondieron */}
             <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
               <CheckCircle2 className="h-6 w-6 text-emerald-500" />
               <div className="mt-4">
                 <div className="text-3xl font-extrabold font-sora leading-none text-indigo-950">{respondidos}</div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">
-                  de {totalInscritos} respondieron
+                  {esEvento ? 'participantes' : `de ${totalInscritos} respondieron`}
                 </div>
               </div>
             </div>
 
-            {/* Conectados */}
-            <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
-              <Circle className="h-6 w-6 text-slate-300" />
-              <div className="mt-4">
-                <div className="text-3xl font-extrabold font-sora leading-none text-slate-400">
-                  {totalInscritos - respondidos}
+            {!esEvento && (
+              <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
+                <Circle className="h-6 w-6 text-slate-300" />
+                <div className="mt-4">
+                  <div className="text-3xl font-extrabold font-sora leading-none text-slate-400">
+                    {totalInscritos - respondidos}
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Por responder</div>
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Por responder</div>
               </div>
-            </div>
+            )}
 
-            {/* Mood Promedio — destacado */}
+            {esEvento && (
+              <div className="card p-5 bg-white border border-slate-100 shadow-sm flex flex-col justify-between rounded-2xl">
+                <Calendar className="h-6 w-6 text-violet-500" />
+                <div className="mt-4">
+                  <div className="text-sm font-extrabold font-sora leading-tight text-violet-700">
+                    {tipoEvento || 'Evento'}
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">Sin registro previo</div>
+                </div>
+              </div>
+            )}
+
             <div
               className="card p-5 pt-4 col-span-2 lg:col-span-2 border-2 shadow-sm rounded-2xl relative flex flex-col justify-end"
               style={{
@@ -617,104 +611,143 @@ export default function LiveClient({
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
-            {/* ── Lista de alumnos (2/3) ── */}
+            {/* Student/Participant Grid */}
             <div className="xl:col-span-2 card p-6 bg-white border border-slate-100 shadow-sm rounded-2xl anim-fade-up delay-2">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="font-extrabold text-indigo-950 font-sora text-base flex items-center gap-2">
                   <Users className="h-5 w-5 text-indigo-600" />
-                  Alumnos del Curso
+                  {esEvento ? 'Participantes' : 'Alumnos del Curso'}
                 </h3>
                 <span className="text-xs font-bold text-slate-500">
-                  <span className="text-emerald-600 font-extrabold">{respondidos}</span> de {totalInscritos} han respondido
+                  <span className="text-emerald-600 font-extrabold">{respondidos}</span>
+                  {esEvento
+                    ? ' participantes'
+                    : <> de {totalInscritos} han respondido</>}
                 </span>
               </div>
 
-              {inscritos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                  <Users className="h-10 w-10 mb-3 opacity-30" />
-                  <p className="text-sm">No hay alumnos inscritos en esta asignatura</p>
-                </div>
-              ) : (
+              {/* Event participants grid */}
+              {esEvento ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {inscritos.map((ins) => {
-                    // usuarios may be array (Supabase nested select) or object
-                    const usuarioRaw = ins.usuarios
-                    const usuarioObj = Array.isArray(usuarioRaw) ? usuarioRaw[0] : usuarioRaw
-                    const nombre = usuarioObj?.nombre ?? ''
-                    const displayName = nombre || 'Sin nombre'
-                    const estudiante_id = ins.estudiante_id
-                    const estado = estadoMap.get(estudiante_id)
-                    const checkin = checkinMap.get(estudiante_id)
-                    const avg = checkin ? calcAvgCheckin(checkin) : null
-                    const topDim = checkin ? topDimension(checkin) : null
-                    const isActivo = estado?.estado === 'activo'
-                    // "Sin activar" sólo si no hay actividad reciente que lo contradiga
-                    const isNeverLoggedIn = neverLoggedIn.includes(estudiante_id) && !checkin && !isActivo
-
-                    const isAtraso = moodActivo?.tipo === 'salida' && checkin && !moods.some(m => m.tipo === 'entrada')
-                    const tieneComentario = !!checkin?.campo_abierto?.trim()
-
+                  {eventParticipants.length === 0 ? (
+                    <div className="col-span-full flex flex-col items-center justify-center py-12 text-slate-400">
+                      <Users className="h-10 w-10 mb-3 opacity-30" />
+                      <p className="text-sm">Esperando participantes...</p>
+                      <p className="text-xs mt-1 text-slate-300">Aparecerán aquí cuando respondan</p>
+                    </div>
+                  ) : eventParticipants.map((p, i) => {
+                    const topDim = topDimension(p.checkin)
+                    const avg = calcAvgCheckin(p.checkin)
+                    const tieneComentario = !!p.comentario?.trim()
                     return (
                       <div
-                        key={estudiante_id}
-                        onClick={() => tieneComentario && setComentarioModal({ nombre: displayName, texto: checkin!.campo_abierto! })}
+                        key={i}
+                        onClick={() => tieneComentario && setComentarioModal({ nombre: p.nombre, texto: p.comentario! })}
                         className={`relative text-center p-3 bg-slate-50/60 border border-slate-100 rounded-2xl flex flex-col items-center gap-1.5 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ${tieneComentario ? 'cursor-pointer' : ''}`}
                       >
-                        {/* Avatar con iniciales */}
-                        <AvatarCircle nombre={displayName} isActivo={isActivo} neverLoggedIn={isNeverLoggedIn} />
-
-                        {/* Nombre — primer nombre + primer apellido */}
+                        <AvatarCircle nombre={p.nombre} isActivo={false} topDimColor={topDim.color} />
                         <div className="text-[10px] font-bold text-slate-700 truncate w-full leading-tight text-center px-1 flex items-center justify-center gap-1">
-                          {displayName.split(' ').slice(0, 2).join(' ')}
-                          {tieneComentario && (
-                            <MessageCircle className="h-3 w-3 text-indigo-400 shrink-0" />
-                          )}
+                          {p.nombre.split(' ').slice(0, 2).join(' ')}
+                          {tieneComentario && <MessageCircle className="h-3 w-3 text-indigo-400 shrink-0" />}
                         </div>
-
-                        {/* Estado / score */}
-                        {isNeverLoggedIn ? (
-                          <div className="flex items-center">
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wider">
-                              Sin activar
-                            </span>
-                          </div>
-                        ) : checkin ? (
-                          <div className="flex items-center gap-1">
-                            <Check className="h-3 w-3 text-emerald-500" />
-                            <span className="text-xs font-extrabold" style={{ color: moodColor(avg!) }}>
-                              {avg!.toFixed(1)}
-                            </span>
-                          </div>
-                        ) : isActivo ? (
-                          <div className="flex items-center gap-1">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-                            <span className="text-[10px] text-emerald-600 font-bold">Activo</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <Circle className="h-3 w-3 text-slate-300" />
-                            <span className="text-[10px] text-slate-400">Pendiente</span>
-                          </div>
-                        )}
-
-                        {/* Atraso badge */}
-                        {isAtraso && (
-                          <button
-                            onClick={() => setShowAtrasoModal(estudiante_id)}
-                            className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center"
-                            title="Posible atraso"
-                          >
-                            <AlertTriangle className="h-2.5 w-2.5 text-white" />
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <Check className="h-3 w-3 text-emerald-500" />
+                          <span className="text-xs font-extrabold" style={{ color: moodColor(avg) }}>
+                            {avg.toFixed(1)}
+                          </span>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
+              ) : (
+                /* Regular enrolled students grid */
+                inscritos.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <Users className="h-10 w-10 mb-3 opacity-30" />
+                    <p className="text-sm">No hay alumnos inscritos en esta asignatura</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    {inscritos.map((ins) => {
+                      const usuarioRaw = ins.usuarios
+                      const usuarioObj = Array.isArray(usuarioRaw) ? usuarioRaw[0] : usuarioRaw
+                      const nombre = usuarioObj?.nombre ?? ''
+                      const displayName = nombre || 'Sin nombre'
+                      const estudiante_id = ins.estudiante_id
+                      const estado = estadoMap.get(estudiante_id)
+                      const checkin = checkinMap.get(estudiante_id)
+                      const avg = checkin ? calcAvgCheckin(checkin) : null
+                      const topDim = checkin ? topDimension(checkin) : null
+                      const isActivo = estado?.estado === 'activo'
+                      const isNeverLoggedIn = neverLoggedIn.includes(estudiante_id) && !checkin && !isActivo
+
+                      const isAtraso = moodActivo?.tipo === 'salida' && checkin && !moods.some(m => m.tipo === 'entrada')
+                      const tieneComentario = !!checkin?.campo_abierto?.trim()
+
+                      return (
+                        <div
+                          key={estudiante_id}
+                          onClick={() => tieneComentario && setComentarioModal({ nombre: displayName, texto: checkin!.campo_abierto! })}
+                          className={`relative text-center p-3 bg-slate-50/60 border border-slate-100 rounded-2xl flex flex-col items-center gap-1.5 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ${tieneComentario ? 'cursor-pointer' : ''}`}
+                        >
+                          <AvatarCircle
+                            nombre={displayName}
+                            isActivo={isActivo}
+                            neverLoggedIn={isNeverLoggedIn}
+                            topDimColor={topDim?.color}
+                          />
+
+                          <div className="text-[10px] font-bold text-slate-700 truncate w-full leading-tight text-center px-1 flex items-center justify-center gap-1">
+                            {displayName.split(' ').slice(0, 2).join(' ')}
+                            {tieneComentario && (
+                              <MessageCircle className="h-3 w-3 text-indigo-400 shrink-0" />
+                            )}
+                          </div>
+
+                          {isNeverLoggedIn ? (
+                            <div className="flex items-center">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wider">
+                                Sin activar
+                              </span>
+                            </div>
+                          ) : checkin ? (
+                            <div className="flex items-center gap-1">
+                              <Check className="h-3 w-3 text-emerald-500" />
+                              <span className="text-xs font-extrabold" style={{ color: moodColor(avg!) }}>
+                                {avg!.toFixed(1)}
+                              </span>
+                            </div>
+                          ) : isActivo ? (
+                            <div className="flex items-center gap-1">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                              <span className="text-[10px] text-emerald-600 font-bold">Activo</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Circle className="h-3 w-3 text-slate-300" />
+                              <span className="text-[10px] text-slate-400">Pendiente</span>
+                            </div>
+                          )}
+
+                          {isAtraso && (
+                            <button
+                              onClick={() => setShowAtrasoModal(estudiante_id)}
+                              className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center"
+                              title="Posible atraso"
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5 text-white" />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
               )}
             </div>
 
-            {/* ── Dimensiones del mood activo (1/3) ── */}
+            {/* Dimensiones panel */}
             <div className="card p-6 bg-white border border-slate-100 shadow-sm rounded-2xl anim-fade-up delay-3">
               <h3 className="font-extrabold text-indigo-950 font-sora mb-5 text-base flex items-center gap-2">
                 {moodActivo
@@ -756,7 +789,7 @@ export default function LiveClient({
                   <Clock className="h-8 w-8 mb-2 opacity-30 animate-pulse" />
                   <p className="text-xs leading-relaxed">
                     {moodActivo
-                      ? 'Esperando respuestas de los estudiantes...'
+                      ? esEvento ? 'Esperando respuestas de los participantes...' : 'Esperando respuestas de los estudiantes...'
                       : 'Inicia un mood para ver los datos en tiempo real'}
                   </p>
                 </div>
@@ -764,7 +797,7 @@ export default function LiveClient({
             </div>
           </div>
 
-          {/* ── Mood historial ── */}
+          {/* Mood historial */}
           {moodHistorial.length > 0 && (
             <div className="card p-6 bg-white border border-slate-100 shadow-sm rounded-2xl anim-fade-up delay-4">
               <h3 className="font-extrabold text-indigo-950 font-sora mb-4 text-base flex items-center gap-2">
@@ -788,10 +821,10 @@ export default function LiveClient({
             </div>
           )}
 
-        </div>{/* /content */}
-      </div>{/* /main */}
+        </div>
+      </div>
 
-      {/* ── Atraso Modal ── */}
+      {/* Atraso Modal */}
       {showAtrasoModal && (
         <div className="modal-overlay" onClick={() => setShowAtrasoModal(null)}>
           <div className="card p-8 max-w-sm w-full mx-4 bg-white shadow-2xl rounded-2xl anim-scale-in"
@@ -821,6 +854,7 @@ export default function LiveClient({
           </div>
         </div>
       )}
+
       {showAgregarModal && (
         <AgregarMoodModal
           onClose={() => setShowAgregarModal(false)}
@@ -828,7 +862,7 @@ export default function LiveClient({
         />
       )}
 
-      {/* ── Comentario Modal ── */}
+      {/* Comentario Modal */}
       {comentarioModal && (
         <div className="modal-overlay" onClick={() => setComentarioModal(null)}>
           <div className="card p-8 max-w-sm w-full mx-4 bg-white shadow-2xl rounded-2xl anim-scale-in"
@@ -853,7 +887,7 @@ export default function LiveClient({
         </div>
       )}
 
-      {/* ── Reporte Listo Modal ── */}
+      {/* Reporte Listo Modal */}
       <Dialog open={!!reporteListo} onOpenChange={(open) => { if (!open) handleCerrarReporteModal() }}>
         <DialogContent showClose={false}>
           {reporteListo?.ok ? (
@@ -888,7 +922,7 @@ export default function LiveClient({
                 </div>
                 <div>
                   <DialogTitle>Mood cerrado</DialogTitle>
-                  <DialogDescription>El mood se cerró pero el análisis no se pudo generar. Reporta este error.</DialogDescription>
+                  <DialogDescription>El mood se cerró pero el análisis no se pudo generar.</DialogDescription>
                 </div>
               </DialogHeader>
               <DialogFooter className="gap-2 sm:gap-2">

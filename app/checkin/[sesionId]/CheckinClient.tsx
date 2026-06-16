@@ -7,12 +7,15 @@ import toast from 'react-hot-toast'
 import { DIMENSIONES } from '@/lib/types'
 import type { Sesion, Mood, MoodCheckin } from '@/lib/types'
 import DimensionCard from '@/components/DimensionCard'
-import { Sparkles, Lock, CheckCircle2, ArrowRight } from 'lucide-react'
+import { Sparkles, Lock, CheckCircle2, ArrowRight, Calendar } from 'lucide-react'
 import DimensionIcon from '@/components/DimensionIcon'
 
 interface Props {
   sesion: Sesion
   mood: Mood
+  esEvento?: boolean
+  nombreEvento?: string
+  tipoEvento?: string
 }
 
 type DimensionValues = {
@@ -29,7 +32,7 @@ const DEFAULT_VALUES: DimensionValues = {
   energia: 0, foco: 0, animo: 0, claridad: 0, confianza: 0, motivacion: 0, memoria: 0,
 }
 
-export default function CheckinClient({ sesion, mood }: Props) {
+export default function CheckinClient({ sesion, mood, esEvento = false, nombreEvento, tipoEvento }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
@@ -43,10 +46,20 @@ export default function CheckinClient({ sesion, mood }: Props) {
   const [existingEntrada, setExistingEntrada] = useState<MoodCheckin | null>(null)
   const [tipo] = useState<'entrada' | 'adicional' | 'salida'>(mood.tipo)
 
+  // Event-specific state
+  const [nombreParticipante, setNombreParticipante] = useState('')
+  const [showGems, setShowGems] = useState(false)
+
   const isClosed = mood.estado === 'cerrado' || sesion.estado_clase === 'cerrada'
 
   useEffect(() => {
     async function init() {
+      if (esEvento) {
+        // Anonymous — no auth required
+        setLoading(false)
+        return
+      }
+
       const { data: { user: u } } = await supabase.auth.getUser()
       if (!u) {
         router.push(`/login?redirectTo=/checkin/${mood.id}`)
@@ -64,7 +77,6 @@ export default function CheckinClient({ sesion, mood }: Props) {
         setPrimerNombre(perfil.nombre.trim().split(/\s+/)[0])
       }
 
-      // 1. Check if student already submitted a response for this specific mood
       const { data: currentCheckin } = await supabase
         .from('mood_checkins')
         .select('*')
@@ -85,7 +97,6 @@ export default function CheckinClient({ sesion, mood }: Props) {
         setSubmitted(true)
       }
 
-      // 2. If it is a salida check-in, load the corresponding entrance check-in for comparison
       if (mood.tipo === 'salida') {
         const { data: moodsInSesion } = await supabase
           .from('moods')
@@ -107,7 +118,8 @@ export default function CheckinClient({ sesion, mood }: Props) {
       setLoading(false)
     }
     init()
-  }, [mood, supabase.auth, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function setValue(key: keyof DimensionValues, val: number) {
     setValues((prev) => ({ ...prev, [key]: val }))
@@ -118,6 +130,10 @@ export default function CheckinClient({ sesion, mood }: Props) {
   }
 
   async function handleSubmit() {
+    if (esEvento) {
+      await handleSubmitEvento()
+      return
+    }
     if (!user) return
     if (!allFilled()) {
       toast.error('Por favor selecciona un valor en cada dimensión')
@@ -125,7 +141,6 @@ export default function CheckinClient({ sesion, mood }: Props) {
     }
     setSubmitting(true)
 
-    // Insert response into mood_checkins
     const { error: checkinErr } = await supabase.from('mood_checkins').insert({
       mood_id: mood.id,
       estudiante_id: user.id,
@@ -139,7 +154,6 @@ export default function CheckinClient({ sesion, mood }: Props) {
       return
     }
 
-    // Upsert into attendance table to mark student present in the session
     await supabase.from('asistencia').upsert({
       sesion_id: sesion.id,
       estudiante_id: user.id,
@@ -147,6 +161,37 @@ export default function CheckinClient({ sesion, mood }: Props) {
     }, { onConflict: 'sesion_id,estudiante_id' })
 
     toast.success('¡Check-in enviado!')
+    setSubmitted(true)
+    setSubmitting(false)
+  }
+
+  async function handleSubmitEvento() {
+    if (!allFilled()) {
+      toast.error('Por favor selecciona un valor en cada dimensión')
+      return
+    }
+    setSubmitting(true)
+
+    const { error } = await supabase.rpc('insertar_checkin_evento', {
+      p_mood_id: mood.id,
+      p_nombre: nombreParticipante.trim(),
+      p_energia: values.energia,
+      p_foco: values.foco,
+      p_animo: values.animo,
+      p_claridad: values.claridad,
+      p_confianza: values.confianza,
+      p_motivacion: values.motivacion,
+      p_memoria: values.memoria,
+      p_comentario: campoAbierto.trim() || null,
+    })
+
+    if (error) {
+      toast.error('Error al enviar: ' + error.message)
+      setSubmitting(false)
+      return
+    }
+
+    toast.success('¡Gracias por participar!')
     setSubmitted(true)
     setSubmitting(false)
   }
@@ -178,25 +223,81 @@ export default function CheckinClient({ sesion, mood }: Props) {
     )
   }
 
+  // Event welcome screen: name entry before showing gems
+  if (esEvento && !showGems) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FF] p-6 font-sans">
+        <div className="card p-10 max-w-sm w-full text-center bg-white border border-slate-100 shadow-xl anim-scale-in">
+          <div className="mb-8">
+            <div className="w-16 h-16 rounded-2xl mx-auto mb-5 flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.1), rgba(6,182,212,0.1))', border: '1px solid rgba(79,70,229,0.15)' }}>
+              <Calendar className="h-8 w-8 text-indigo-600" />
+            </div>
+            <h1 className="text-2xl font-extrabold font-sora text-indigo-950 mb-2 leading-tight">
+              {nombreEvento || 'Evento'}
+            </h1>
+            {tipoEvento && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider"
+                style={{ background: 'rgba(139,92,246,0.1)', color: '#7C3AED', border: '1px solid rgba(139,92,246,0.2)' }}>
+                {tipoEvento}
+              </span>
+            )}
+            <p className="text-slate-400 text-sm mt-3 leading-relaxed">
+              Check-in emocional · 7 dimensiones socioemocionales
+            </p>
+          </div>
+
+          <div className="mb-6 text-left">
+            <label className="field-label">Tu nombre</label>
+            <input
+              type="text"
+              value={nombreParticipante}
+              onChange={e => setNombreParticipante(e.target.value)}
+              className="input-field text-base"
+              placeholder="Ej: María González"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter' && nombreParticipante.trim()) setShowGems(true) }}
+            />
+          </div>
+
+          <button
+            onClick={() => setShowGems(true)}
+            disabled={!nombreParticipante.trim()}
+            className="btn-primary w-full py-4 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
+            style={{ opacity: nombreParticipante.trim() ? 1 : 0.55, cursor: nombreParticipante.trim() ? 'pointer' : 'not-allowed' }}
+          >
+            Continuar <ArrowRight className="h-4 w-4" />
+          </button>
+
+          <p className="text-[10px] text-slate-400 mt-4 leading-relaxed">
+            Solo se muestra tu nombre al organizador del evento. Tus respuestas son anónimas para el público.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (submitted) {
     const entradaData = tipo === 'salida' ? existingEntrada : { ...values }
 
     return (
       <div className="checkin-page p-6 pb-20 font-sans">
         <div className="max-w-md mx-auto anim-fade-up">
-          {/* Header */}
           <div className="text-center mb-8 pt-8">
             <div className="flex justify-center mb-4 text-indigo-600">
               <CheckCircle2 className="h-12 w-12" />
             </div>
-            <h1 className="text-2xl font-extrabold font-sora text-indigo-950 mb-1">¡Excelente trabajo!</h1>
+            <h1 className="text-2xl font-extrabold font-sora text-indigo-950 mb-1">
+              {esEvento ? '¡Gracias por participar!' : '¡Excelente trabajo!'}
+            </h1>
             <p className="text-slate-500 text-sm">
-              {tipo === 'salida' ? 'Tu ticket de salida ha sido guardado' : 'Tu check-in de entrada ha sido guardado'}
+              {esEvento
+                ? 'Tu respuesta ha sido registrada exitosamente.'
+                : tipo === 'salida' ? 'Tu ticket de salida ha sido guardado' : 'Tu check-in de entrada ha sido guardado'}
             </p>
           </div>
 
-          {/* Resumen */}
-          {tipo === 'salida' && entradaData ? (
+          {tipo === 'salida' && entradaData && !esEvento ? (
             <div>
               <h2 className="text-center font-bold text-xs uppercase tracking-widest text-slate-400 mb-6">
                 Comparativa: Entrada vs Salida
@@ -230,10 +331,7 @@ export default function CheckinClient({ sesion, mood }: Props) {
                         <div className="flex gap-1">
                           {[1, 2, 3, 4, 5].map((g) => (
                             <div key={g} className="w-full h-3 rounded-md"
-                              style={{
-                                backgroundColor: g <= entVal ? dim.color : 'rgba(0,0,0,0.04)',
-                                opacity: g <= entVal ? 0.95 : 1
-                              }} />
+                              style={{ backgroundColor: g <= entVal ? dim.color : 'rgba(0,0,0,0.04)' }} />
                           ))}
                         </div>
                       </div>
@@ -243,10 +341,7 @@ export default function CheckinClient({ sesion, mood }: Props) {
                         <div className="flex gap-1">
                           {[1, 2, 3, 4, 5].map((g) => (
                             <div key={g} className="w-full h-3 rounded-md"
-                              style={{
-                                backgroundColor: g <= salVal ? dim.color : 'rgba(0,0,0,0.04)',
-                                opacity: g <= salVal ? 0.95 : 1
-                              }} />
+                              style={{ backgroundColor: g <= salVal ? dim.color : 'rgba(0,0,0,0.04)' }} />
                           ))}
                         </div>
                       </div>
@@ -312,13 +407,17 @@ export default function CheckinClient({ sesion, mood }: Props) {
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 group">
-              <Sparkles className="h-5 w-5 text-indigo-600 group-hover:rotate-12 transition-transform duration-300" />
+              {esEvento
+                ? <Calendar className="h-5 w-5 text-indigo-600" />
+                : <Sparkles className="h-5 w-5 text-indigo-600 group-hover:rotate-12 transition-transform duration-300" />}
               <span className="font-extrabold font-sora text-indigo-950">
-                MoodClass
+                {esEvento ? (nombreEvento || 'Evento') : 'MoodClass'}
               </span>
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
-              Ticket de {tipo} · {sesion.tipo_actividad}
+              {esEvento
+                ? `Check-in · ${tipoEvento || 'Evento'}`
+                : `Ticket de ${tipo} · ${sesion.tipo_actividad}`}
             </div>
           </div>
           <div className="text-right">
@@ -332,13 +431,12 @@ export default function CheckinClient({ sesion, mood }: Props) {
 
       {/* Progress bar */}
       <div className="progress-bar w-full">
-        <div className="progress-fill"
-          style={{ width: `${(filled / 7) * 100}%` }} />
+        <div className="progress-fill" style={{ width: `${(filled / 7) * 100}%` }} />
       </div>
 
-      {/* Title + Disclaimer */}
+      {/* Title */}
       <div className="px-6 pt-10 pb-6 max-w-md mx-auto text-center anim-fade-up">
-        {primerNombre && (
+        {!esEvento && primerNombre && (
           <p className="text-2xl font-extrabold font-sora text-indigo-950 mb-1">
             ¡Hola,{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500">
@@ -346,29 +444,35 @@ export default function CheckinClient({ sesion, mood }: Props) {
             </span>, qué bueno tenerte aquí!
           </p>
         )}
+        {esEvento && (
+          <p className="text-xl font-extrabold font-sora text-indigo-950 mb-1">
+            ¡Hola,{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500">
+              {nombreParticipante.split(' ')[0]}
+            </span>!
+          </p>
+        )}
         <h1 className="text-2xl font-extrabold font-sora text-indigo-950 mb-2">
-          {tipo === 'entrada'
+          {esEvento
+            ? '¿Cómo llegas al evento?'
+            : tipo === 'entrada'
             ? '¿Cómo llegas hoy?'
             : tipo === 'salida'
             ? '¿Cómo te vas de la clase?'
             : `¿Cómo te sentiste en esta actividad de ${(mood.tipo_actividad || 'hoy').toLowerCase()}?`}
         </h1>
-        <p className="text-slate-500 text-xs leading-relaxed mb-1">
-          {tipo === 'entrada'
-            ? 'Responde con honestidad marcando tus niveles en estas 7 dimensiones socioemocionales.'
-            : tipo === 'salida'
-            ? 'Tómate un momento para reflexionar sobre los niveles en estas dimensiones al salir de clases.'
-            : `Tómate un momento para reflexionar sobre los niveles en estas dimensiones al terminar esta actividad de ${(mood.tipo_actividad || 'hoy').toLowerCase()}.`}
+        <p className="text-slate-500 text-xs leading-relaxed mb-4">
+          {esEvento
+            ? 'Marca tus niveles en estas 7 dimensiones socioemocionales con honestidad.'
+            : 'Ilumina las gemas según cómo te sientes en cada dimensión'}
         </p>
-        <p className="text-slate-400 text-xs leading-relaxed mb-4">
-          Ilumina las gemas según cómo te sientes en cada dimensión
-        </p>
-        {/* Privacy disclaimer */}
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-left">
-          <p className="text-[10px] text-indigo-700 leading-relaxed">
-            <strong className="font-bold">Privacidad:</strong> Tus respuestas son anónimas para el docente. Solo se utilizan para monitorear el bienestar colectivo del curso. Nadie puede ver tu respuesta individual.
-          </p>
-        </div>
+        {!esEvento && (
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-left">
+            <p className="text-[10px] text-indigo-700 leading-relaxed">
+              <strong className="font-bold">Privacidad:</strong> Tus respuestas son anónimas para el docente. Solo se utilizan para monitorear el bienestar colectivo del curso.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Dimension cards */}
@@ -395,15 +499,15 @@ export default function CheckinClient({ sesion, mood }: Props) {
             value={campoAbierto}
             onChange={e => setCampoAbierto(e.target.value)}
             className="input-field"
-            placeholder="Escíbelo aquí si lo deseas. Tu respuesta es completamente anónima..."
+            placeholder="Escríbelo aquí si lo deseas..."
             rows={3}
             maxLength={500}
           />
-          <p className="text-[10px] text-slate-400 mt-1.5">Máximo 500 caracteres. Completamente opcional y anónimo.</p>
+          <p className="text-[10px] text-slate-400 mt-1.5">Máximo 500 caracteres.</p>
         </div>
       </div>
 
-      {/* Submit button - floating submit-bar */}
+      {/* Submit button */}
       <div className="submit-bar">
         <div className="max-w-md mx-auto">
           <button
@@ -417,7 +521,7 @@ export default function CheckinClient({ sesion, mood }: Props) {
           >
             {submitting ? 'Enviando...' : allFilled() ? (
               <span className="flex items-center justify-center gap-1.5">
-                Enviar check-in <ArrowRight className="h-4 w-4" />
+                {esEvento ? 'Enviar respuesta' : 'Enviar check-in'} <ArrowRight className="h-4 w-4" />
               </span>
             ) : (
               `Completa las ${7 - filled} dimensiones restantes`

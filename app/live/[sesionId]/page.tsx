@@ -10,31 +10,28 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
   if (!user) redirect('/login')
 
   const usuario = await getOrCreatePerfil(supabase, user)
-
   if (!usuario) redirect('/login')
 
   const { data: sesion } = await supabase
     .from('sesiones')
-    .select('*, asignaturas(*)')
+    .select('*, asignaturas(*), secciones(tipo, nombre_evento, tipo_evento, descripcion_evento)')
     .eq('id', sesionId)
     .single()
 
   if (!sesion) notFound()
 
-  // Verify ownership
   if (sesion.asignaturas?.docente_id !== user.id) redirect('/dashboard')
 
-  // Load all moods for this session (history + active)
+  const esEvento = (sesion.secciones as { tipo?: string } | null)?.tipo === 'evento'
+
   const { data: moods } = await supabase
     .from('moods')
     .select('*')
     .eq('sesion_id', sesionId)
     .order('orden', { ascending: true })
 
-  // Find the active mood
   const moodActivo = moods?.find(m => m.estado === 'activo') ?? null
 
-  // Load mood_estados for the active mood (who has responded)
   const { data: moodEstados } = moodActivo
     ? await supabase
         .from('mood_estados')
@@ -42,7 +39,6 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
         .eq('mood_id', moodActivo.id)
     : { data: [] }
 
-  // Load mood_checkins for the active mood
   const { data: moodCheckins } = moodActivo
     ? await supabase
         .from('mood_checkins')
@@ -50,39 +46,45 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
         .eq('mood_id', moodActivo.id)
     : { data: [] }
 
-  // Load ALL enrolled students (source of truth for the students list)
-  const { data: inscripciones } = await supabase
-    .from('inscripciones')
-    .select('estudiante_id, usuarios(id, nombre, email)')
-    .eq('asignatura_id', sesion.asignatura_id)
+  // For events: no pre-enrolled students
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let inscripciones: any[] = []
+  let neverLoggedIn: string[] = []
 
-  // ── Fetch last_sign_in_at from auth.users (requires service_role) ──────────
-  // Build a set of all student auth user IDs from inscripciones
-  const estudianteIds = (inscripciones ?? []).map(i => i.estudiante_id).filter(Boolean)
+  if (!esEvento) {
+    const { data: ins } = await supabase
+      .from('inscripciones')
+      .select('estudiante_id, usuarios(id, nombre, email)')
+      .eq('asignatura_id', sesion.asignatura_id)
 
-  const neverLoggedInSet = new Set<string>()
+    inscripciones = ins ?? []
 
-  if (estudianteIds.length > 0) {
-    try {
-      const adminClient = createAdminClient()
-      // Fetch auth users in one call using listUsers and filter client-side
-      // (Admin API supports listing all users; we filter by ID)
-      const { data: authData } = await adminClient.auth.admin.listUsers({
-        perPage: 1000,
-      })
-      const authUsers = authData?.users ?? []
-      const authMap = new Map(authUsers.map(u => [u.id, u.last_sign_in_at ?? null]))
+    const estudianteIds = inscripciones.map((i) => i.estudiante_id as string).filter(Boolean)
 
-      for (const id of estudianteIds) {
-        const lastSignIn = authMap.get(id)
-        if (!lastSignIn) neverLoggedInSet.add(id)
+    if (estudianteIds.length > 0) {
+      try {
+        const adminClient = createAdminClient()
+        const { data: authData } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+        const authUsers = authData?.users ?? []
+        const authMap = new Map(authUsers.map(u => [u.id, u.last_sign_in_at ?? null]))
+
+        const neverSet = new Set<string>()
+        for (const id of estudianteIds) {
+          if (!authMap.get(id)) neverSet.add(id)
+        }
+        neverLoggedIn = Array.from(neverSet)
+      } catch {
+        // Degrade gracefully
       }
-    } catch {
-      // If admin call fails (e.g. env var missing), degrade gracefully — all shown as active
     }
   }
 
-  const neverLoggedIn = Array.from(neverLoggedInSet)
+  const seccionInfo = sesion.secciones as {
+    tipo?: string
+    nombre_evento?: string
+    tipo_evento?: string
+    descripcion_evento?: string
+  } | null
 
   return (
     <LiveClient
@@ -94,6 +96,9 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
       initialMoodCheckins={moodCheckins || []}
       initialInscritos={inscripciones || []}
       neverLoggedIn={neverLoggedIn}
+      esEvento={esEvento}
+      nombreEvento={seccionInfo?.nombre_evento ?? undefined}
+      tipoEvento={seccionInfo?.tipo_evento ?? undefined}
     />
   )
 }
