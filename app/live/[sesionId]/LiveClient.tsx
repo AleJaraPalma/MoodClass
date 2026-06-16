@@ -645,7 +645,7 @@ export default function LiveClient({
                         onClick={() => tieneComentario && setComentarioModal({ nombre: p.nombre, texto: p.comentario! })}
                         className={`relative text-center p-3 bg-slate-50/60 border border-slate-100 rounded-2xl flex flex-col items-center gap-1.5 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ${tieneComentario ? 'cursor-pointer' : ''}`}
                       >
-                        <AvatarCircle nombre={p.nombre} isActivo={false} topDimColor="#FFE566" />
+                        <AvatarCircle nombre={p.nombre} isActivo={false} topDimColor={undefined} />
                         <div className="text-[10px] font-bold text-slate-700 truncate w-full leading-tight text-center px-1 flex items-center justify-center gap-1">
                           {p.nombre.split(' ').slice(0, 2).join(' ')}
                           {tieneComentario && <MessageCircle className="h-3 w-3 text-indigo-400 shrink-0" />}
@@ -695,7 +695,7 @@ export default function LiveClient({
                             nombre={displayName}
                             isActivo={isActivo}
                             neverLoggedIn={isNeverLoggedIn}
-                            topDimColor={checkin ? '#FFE566' : undefined}
+                            topDimColor={undefined}
                           />
 
                           <div className="text-[10px] font-bold text-slate-700 truncate w-full leading-tight text-center px-1 flex items-center justify-center gap-1">
