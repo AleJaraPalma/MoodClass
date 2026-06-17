@@ -169,7 +169,8 @@ export default function LiveClient({
   }, [])
 
   const fetchLiveData = useCallback(async (currentMoodId?: string) => {
-    const moodId = currentMoodId ?? moodActivo?.id
+    const fallbackMoodId = esEvento ? moods[moods.length - 1]?.id : undefined
+    const moodId = currentMoodId ?? moodActivo?.id ?? fallbackMoodId
     if (!moodId) return
 
     const [estadosRes, checkinsRes, sesionRes] = await Promise.all([
@@ -182,7 +183,7 @@ export default function LiveClient({
     if (checkinsRes.data) setMoodCheckins(checkinsRes.data as MoodCheckin[])
     if (sesionRes.data) setSesion(prev => ({ ...prev, ...sesionRes.data }))
     setLastUpdate(new Date())
-  }, [moodActivo?.id, sesion.id, supabase])
+  }, [moodActivo?.id, moods, esEvento, sesion.id, supabase])
 
   useEffect(() => {
     const interval = setInterval(() => fetchLiveData(), 10000)

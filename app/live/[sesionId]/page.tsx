@@ -32,6 +32,9 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
 
   const moodActivo = moods?.find(m => m.estado === 'activo') ?? null
 
+  // For events: load checkins from the most recent mood even when closed
+  const moodParaCheckins = moodActivo ?? (esEvento && moods?.length ? moods[moods.length - 1] : null)
+
   const { data: moodEstados } = moodActivo
     ? await supabase
         .from('mood_estados')
@@ -39,11 +42,11 @@ export default async function LivePage({ params }: { params: Promise<{ sesionId:
         .eq('mood_id', moodActivo.id)
     : { data: [] }
 
-  const { data: moodCheckins } = moodActivo
+  const { data: moodCheckins } = moodParaCheckins
     ? await supabase
         .from('mood_checkins')
         .select('*')
-        .eq('mood_id', moodActivo.id)
+        .eq('mood_id', moodParaCheckins.id)
     : { data: [] }
 
   // For events: no pre-enrolled students
