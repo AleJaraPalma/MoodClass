@@ -870,24 +870,47 @@ export default function ReportesClient({ usuario, secciones }: Props) {
                     </h3>
                     <p className="text-[11px] text-slate-400 mb-4">Comentarios de los estudiantes en este mood</p>
                     <div className="space-y-2">
-                      {inscritosNombres.map(({ estudiante_id, nombre }) => {
-                        const checkin = selectedMood.checkins.find(c => c.estudiante_id === estudiante_id)
-                        const texto = checkin?.campo_abierto?.trim()
-                        return (
-                          <div key={estudiante_id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
-                            <span className="text-xs font-bold text-slate-700 w-40 shrink-0 truncate pt-0.5">{nombre}</span>
-                            {checkin ? (
-                              texto ? (
-                                <p className="text-xs text-slate-600 leading-relaxed italic flex-1">&ldquo;{texto}&rdquo;</p>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">Sin comentario</span>
-                              )
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">No respondió</span>
-                            )}
-                          </div>
+                      {(() => {
+                        const eventCheckins = selectedMood.checkins.filter(c =>
+                          c.campo_abierto?.startsWith('[EVENTO]')
                         )
-                      })}
+                        if (eventCheckins.length > 0) {
+                          return eventCheckins.map((c, i) => {
+                            const raw = (c.campo_abierto ?? '').replace('[EVENTO] ', '')
+                            const colonIdx = raw.indexOf(': ')
+                            const nombre = colonIdx > -1 ? raw.slice(0, colonIdx) : raw
+                            const texto = colonIdx > -1 ? raw.slice(colonIdx + 2) : ''
+                            return (
+                              <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
+                                <span className="text-xs font-bold text-slate-700 w-40 shrink-0 truncate pt-0.5">{nombre}</span>
+                                {texto ? (
+                                  <p className="text-xs text-slate-600 leading-relaxed italic flex-1">&ldquo;{texto}&rdquo;</p>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">Sin comentario</span>
+                                )}
+                              </div>
+                            )
+                          })
+                        }
+                        return inscritosNombres.map(({ estudiante_id, nombre }) => {
+                          const checkin = selectedMood.checkins.find(c => c.estudiante_id === estudiante_id)
+                          const texto = checkin?.campo_abierto?.trim()
+                          return (
+                            <div key={estudiante_id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
+                              <span className="text-xs font-bold text-slate-700 w-40 shrink-0 truncate pt-0.5">{nombre}</span>
+                              {checkin ? (
+                                texto ? (
+                                  <p className="text-xs text-slate-600 leading-relaxed italic flex-1">&ldquo;{texto}&rdquo;</p>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">Sin comentario</span>
+                                )
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">No respondió</span>
+                              )}
+                            </div>
+                          )
+                        })
+                      })()}
                     </div>
                   </div>
                 </>
